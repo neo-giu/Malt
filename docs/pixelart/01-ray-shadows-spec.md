@@ -62,8 +62,8 @@ Success means, judged side by side and zoomed:
   - origin = `position + geometric_normal * offset`, `offset` in world units scaled by the pixel footprint at that depth
     (so the bias is the same in pixels everywhere and needs no per-scene tuning);
   - back-facing to the light (`NoL <= 0`) is left to the ramp, as now.
-- `SceneLighting` node: new input `Shadow Mode` = `Shadow Maps` (default, current behaviour) | `Ray Traced`; when ray
-  traced, build the BVH and skip shadow-map rendering for opaque shadows.
+- `SceneLighting` node: new bool input `Ray Traced Shadows` (default off = shadow maps, current behaviour; an enum socket does not
+  register in Malt's Render graph); when on, build the BVH and skip shadow-map rendering for opaque shadows.
 - Sprite mode note: for pixel-perfect output render 1 sample per pixel (World `Samples.Grid Size` = 1) so the shadow
   test is taken once at the pixel centre; with more samples the yes/no answers are averaged by Malt's AA.
 
@@ -86,7 +86,7 @@ Scripted GUI renders (option B), each with a debug output of the raw shadow mask
 
 R1. SSBO class + CPU mesh cache (+ tests: data round-trip through an SSBO read-back).
 R2. BVH build + Python reference traversal + watertight test (tests 1-2).
-R3. `RayShadows.py` + `RayShadows.glsl` + hook + `Shadow Mode` input (renders 3-6).
+R3. `RayShadows.py` + `RayShadows.glsl` + hook + `Ray Traced Shadows` input (renders 3-6).
 R4. Owner comparison + timings (7-8), results note in `docs/pixelart/`.
 Later: two-level BVH, deforming-mesh refit, viewport speed.
 

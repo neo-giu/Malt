@@ -11,7 +11,7 @@
   junctions into this checkout) and quits WITHOUT saving. Output dirs go under `build/pixelart/` (gitignored).
   A GLSL compile error shows in `OUT_DIR/stdout.txt` and in the render (Malt's error colour); check both.
 - NEVER save, modify, move or copy over any `.blend` file outside `build/`. Owner files are read-only
-  (e.g. `D:/DocuBKP/Blender/testmalt.blend`). In-memory edits in `tools/pixelart/scenes.py` are fine.
+  (e.g. `H:/GameDev/Pixelizer/content/malt/testmalt.blend`; never the owner's originals). In-memory edits in `tools/pixelart/scenes.py` are fine.
 - Never edit the release add-on in `%APPDATA%/Blender Foundation/Blender/5.2/scripts/addons/BlenderMalt`.
 - Match the surrounding Malt code style (4-space indent, existing naming). No unrelated refactors.
 - Commit only the files in your card's fence.

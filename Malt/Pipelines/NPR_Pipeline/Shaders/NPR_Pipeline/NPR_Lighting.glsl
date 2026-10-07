@@ -2,6 +2,7 @@
 #define NPR_LIGHTING_GLSL
 
 #include "Lighting/Lighting.glsl"
+#include "Lighting/RayShadows.glsl"
 
 uniform usampler2DArray SHADOWMAPS_ID_SPOT;
 uniform usampler2DArray SHADOWMAPS_ID_SUN;
@@ -76,7 +77,10 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             vec2 uv = shadow.light_uv.xy;
             int index = light.type_index;
 
-            shadow_id = texture(SHADOWMAPS_ID_SPOT, vec3(uv, index)).x;
+            if(!RAY_SHADOWS)
+            {
+                shadow_id = texture(SHADOWMAPS_ID_SPOT, vec3(uv, index)).x;
+            }
 
             t_shadow = spot_shadow(position, light, TRANSPARENT_SHADOWMAPS_DEPTH_SPOT, bias);
 
@@ -91,7 +95,10 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             vec2 uv = shadow.light_uv.xy;
             int index = light.type_index * LIGHTS.cascades_count + S.cascade;
 
-            shadow_id = texture(SHADOWMAPS_ID_SUN, vec3(uv, index)).x;
+            if(!RAY_SHADOWS)
+            {
+                shadow_id = texture(SHADOWMAPS_ID_SUN, vec3(uv, index)).x;
+            }
 
             t_shadow = sun_shadow(position, light, TRANSPARENT_SHADOWMAPS_DEPTH_SUN, bias, S.cascade);
 
@@ -104,7 +111,10 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             vec3 uv = shadow.light_uv;
             int index = light.type_index;
 
-            shadow_id = texture(SHADOWMAPS_ID_POINT, vec4(uv, index)).x;
+            if(!RAY_SHADOWS)
+            {
+                shadow_id = texture(SHADOWMAPS_ID_POINT, vec4(uv, index)).x;
+            }
 
             t_shadow = point_shadow(position, light, TRANSPARENT_SHADOWMAPS_DEPTH_POINT, bias);
 
@@ -112,11 +122,36 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             t_shadow_id = texture(TRANSPARENT_SHADOWMAPS_ID_POINT, vec4(uv, index)).x;
         }
 
-        S.shadow = shadow.shadow;
-
-        if(self_shadows == false && id == shadow_id)
+        if(RAY_SHADOWS)
         {
-            S.shadow = false;
+            // One exact yes/no ray per pixel and light. The bias is the same number of pixels everywhere.
+            vec3 geometric_normal = true_normal();
+            if(dot(geometric_normal, S.L) < 0.0)
+            {
+                geometric_normal = -geometric_normal;
+            }
+            vec3 ray_origin = position + geometric_normal * RAY_BIAS_PX * pixel_world_size(position);
+            vec3 ray_dir = -light.direction;
+            float ray_t_max = 1e30;
+            if(light.type != LIGHT_SUN)
+            {
+                vec3 to_light = light.position - ray_origin;
+                float light_distance = length(to_light);
+                ray_dir = to_light / max(light_distance, 1e-20);
+                ray_t_max = light_distance * (1.0 - 1e-4);
+            }
+            int light_group = LIGHT_GROUP_INDEX(light_index);
+            uint light_group_bit = (light_group >= 0 && light_group < 32) ? (1u << uint(light_group)) : 0u;
+            S.shadow = ray_occluded(ray_origin, ray_dir, ray_t_max, id, self_shadows, light_group_bit);
+        }
+        else
+        {
+            S.shadow = shadow.shadow;
+
+            if(self_shadows == false && id == shadow_id)
+            {
+                S.shadow = false;
+            }
         }
         
         S.shadow_multiply = S.shadow ? vec3(0) : vec3(1);

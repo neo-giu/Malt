@@ -3,7 +3,7 @@
 > Executed as card waves (`bash tools/cards/run_cards.sh R1 R2 R3 R4`), one task = one card = one commit, on branch
 > `pixelart`. Steps use checkbox (`- [ ]`) syntax. Each card's fence = its **Files** list.
 
-**Goal:** Malt's NPR pipeline gets a `Shadow Mode = Ray Traced` option: one exact, hard yes/no shadow test per pixel and
+**Goal:** Malt's NPR pipeline gets a `Ray Traced Shadows` option: one exact, hard yes/no shadow test per pixel and
 light, traced on the GPU against the scene triangles.
 
 **Architecture:** CPU side (Malt server, numpy): keep each sub-mesh's triangles, build one world-space BVH per frame,
@@ -18,7 +18,7 @@ Blender with `H:/GameDev/Pixelizer/.venv/Scripts/python` (numpy + pytest), so th
 ## Global constraints
 
 - Hard shadows only: a boolean per ray. No PCF, no soft shadows, no blending.
-- Shadow maps stay the default; ray tracing only when `Shadow Mode = Ray Traced`.
+- Shadow maps stay the default; ray tracing only when `Ray Traced Shadows` is on.
 - Only opaque materials cast ray shadows (v1). Transparent shadow maps keep working for shadow-map mode.
 - A triangle blocks light L only if its material's `Light Groups.Shadow` contains L's `Light Group` (same rule as
   `SceneLighting.get_light_group_batches`), and, when self-shadows are off, its object ID differs from the receiver's.
@@ -56,7 +56,7 @@ Blender with `H:/GameDev/Pixelizer/.venv/Scripts/python` (numpy + pytest), so th
   `np.frombuffer(ctypes buffer)` via the IBuffer's `buffer()` and `ctype()`; positions reshape `(-1, 3)`, indices
   `(-1, 3)`), and the `SSBO` class next to `UBO`.
 - [ ] Step 3: Run `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`; GUI smoke render
-  (see RULES) of `D:/DocuBKP/Blender/testmalt.blend` frame 1 still succeeds and is pixel-identical to
+  (see RULES) of `H:/GameDev/Pixelizer/content/malt/testmalt.blend` frame 1 still succeeds and is pixel-identical to
   `tests/pixelart/ref/testmalt_f1.png` (copy the current dev render there first, in this card).
 - [ ] Step 4: Commit `R1: SSBO class, CPU triangles on meshes`.
 
@@ -85,7 +85,7 @@ Blender with `H:/GameDev/Pixelizer/.venv/Scripts/python` (numpy + pytest), so th
   - `depth <= 48` and every triangle appears in exactly one leaf.
 - [ ] Step 2: Implement. Step 3: run tests. Step 4: commit `R2: BVH build and reference traversal`.
 
-### Task R3: GPU ray shadows + Shadow Mode + render checks
+### Task R3: GPU ray shadows + Ray Traced Shadows input + render checks
 
 **Files:** Create `Malt/Render/RayShadows.py`, `Malt/Shaders/Lighting/RayShadows.glsl`,
 `tools/pixelart/scenes.py`, `tests/pixelart/test_r3_cache.py`; Modify
@@ -107,7 +107,7 @@ Blender with `H:/GameDev/Pixelizer/.venv/Scripts/python` (numpy + pytest), so th
   pixel_world_size(position)` (true_normal = geometric normal facing the light side); sun: `dir = -light.direction`,
   `t_max = 1e30`; point/spot: towards `light.position`, `t_max = distance * (1 - 1e-4)`; `S.shadow = ray_occluded(...)`,
   `S.shadow_multiply` as now; skip the shadow-map lookups.
-- `SceneLighting` inputs: `Shadow Mode` (enum `Shadow Maps`|`Ray Traced`, default `Shadow Maps`), `Ray Bias (px)`
+- `SceneLighting` inputs: `Ray Traced Shadows` (bool, default off; enum sockets do not register in the Render graph), `Ray Bias (px)`
   (float, default 1.0). Ray mode: call `RayShadows.update` once per frame, register it in `scene.shader_resources`
   as `'RAY_SHADOWS'`, still render shadow maps for transparent batches only.
 - `tools/pixelart/scenes.py`: setup functions the GUI render script calls by name (in-memory edits only, never saved):
@@ -122,7 +122,7 @@ Blender with `H:/GameDev/Pixelizer/.venv/Scripts/python` (numpy + pytest), so th
 - [ ] Step 3: Checks, quoted in the Report: box_plane shadow pixels vs the analytic rectangle (count of mismatches
   away from the edge = 0, edge within 1 px); lit_sphere shadowed lit-side pixels = 0; cube_contact: no lit pixel row
   between cube and shadow; same frame rendered twice identical; build ms and frame ms.
-- [ ] Step 4: Commit `R3: ray-traced hard shadows (Shadow Mode = Ray Traced)`.
+- [ ] Step 4: Commit `R3: ray-traced hard shadows (Ray Traced Shadows input)`.
 
 ### Task R4 (orchestrator): owner comparison
 

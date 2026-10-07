@@ -4,6 +4,7 @@ from Malt.PipelineParameters import Parameter, Type
 
 from Malt.Render import Common
 from Malt.Render import Lighting
+from Malt.Render.RayShadows import RayShadows
 from Malt.Pipelines.NPR_Pipeline import NPR_Lighting
 
 class SceneLighting(PipelineNode):
@@ -18,6 +19,7 @@ class SceneLighting(PipelineNode):
         self.shadowmaps_opaque = NPR_Lighting.NPR_ShadowMaps()
         self.shadowmaps_transparent = NPR_Lighting.NPR_TransparentShadowMaps()
         self.common_buffer = Common.CommonBuffer()
+        self.ray_shadows = RayShadows()
 
     @classmethod
     def reflect_inputs(cls):
@@ -46,6 +48,13 @@ class SceneLighting(PipelineNode):
         inputs['Sun CSM Distribution'] = Parameter(0.9, Type.FLOAT, doc="""
             Interpolates the cascades distribution along the view distance between linear distribution *(at 0)* and logarithmic distribution *(at 1)*.  
             The appropriate value depends on camera FOV and scene characteristics.""")
+
+        inputs['Ray Traced Shadows'] = Parameter(False, Type.BOOL, doc="""
+            Cast one exact hard shadow ray per pixel and light against the scene triangles (opaque materials only),
+            instead of using shadow maps. For pixel-perfect shadows, also set *Samples.Grid Size* to 1.""")
+
+        inputs['Ray Bias (px)'] = Parameter(1.0, Type.FLOAT, doc=
+            "*Ray Traced* shadows: how far, in pixels, the ray origin is moved off the surface along the geometric normal.")
         return inputs
     
     @classmethod
@@ -91,6 +100,13 @@ class SceneLighting(PipelineNode):
             inputs['Point Resolution'],
             inputs['Sun CSM Count'])
         
+        ray_traced = bool(inputs['Ray Traced Shadows'])
+        self.ray_shadows.enabled = ray_traced
+        self.ray_shadows.bias_px = inputs['Ray Bias (px)']
+        if ray_traced:
+            # Executed once per AA sample, but the BVH only changes once per frame (cached by RayShadows)
+            self.ray_shadows.update(scene, opaque_batches)
+
         shader_resources = scene.shader_resources.copy()
         shader_resources['COMMON_UNIFORMS'] = self.common_buffer
         shader_resources['SCENE_LIGHTS'] = self.lights_buffer
@@ -109,8 +125,9 @@ class SceneLighting(PipelineNode):
                                 result[material] = meshes
                         return result
                     #TODO: Callback
-                    self.pipeline.draw_scene_pass(fbos_opaque[i], get_light_group_batches(opaque_batches), 
-                        'SHADOW_PASS', self.pipeline.default_shader['SHADOW_PASS'], shader_resources)
+                    if not ray_traced:
+                        self.pipeline.draw_scene_pass(fbos_opaque[i], get_light_group_batches(opaque_batches), 
+                            'SHADOW_PASS', self.pipeline.default_shader['SHADOW_PASS'], shader_resources)
                     self.pipeline.draw_scene_pass(fbos_transparent[i], get_light_group_batches(transparent_batches), 
                         'SHADOW_PASS', self.pipeline.default_shader['SHADOW_PASS'], shader_resources)
         
@@ -133,6 +150,7 @@ class SceneLighting(PipelineNode):
         scene.shader_resources['LIGHT_GROUPS'] = self.light_groups_buffer
         scene.shader_resources['SHADOWMAPS'] = self.shadowmaps_opaque
         scene.shader_resources['TRANSPARENT_SHADOWMAPS'] = self.shadowmaps_transparent
+        scene.shader_resources['RAY_SHADOWS'] = self.ray_shadows
 
         outputs['Scene'] = scene
 

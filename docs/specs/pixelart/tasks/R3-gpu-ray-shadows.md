@@ -1,4 +1,4 @@
-# R3-gpu-ray-shadows — GPU ray shadows + Shadow Mode + render checks
+# R3-gpu-ray-shadows — GPU ray shadows + Ray Traced Shadows input + render checks
 
 Requirements: owner approved the spec and the plan, 2026-10-07. Do exactly the plan's **Task R3** in
 `docs/pixelart/02-ray-shadows-plan.md` (Files, Interfaces, Steps). Global constraints and Review focus apply.
