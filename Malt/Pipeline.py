@@ -1,4 +1,5 @@
 import math, os, ctypes
+import numpy as np
 from os import path
 
 from Malt.Utils import LOG
@@ -177,10 +178,15 @@ class Pipeline():
         uv_vbos = [load_VBO(e) for e in uvs]
         color_vbos = [load_VBO(e) if e else None for e in colors]
 
+        # Copies, not views: the IPC buffers are reused
+        cpu_positions = np.frombuffer(position.buffer(), dtype=np.float32, count=len(position)).reshape(-1, 3).copy()
+
         results = []
 
         for i, index in enumerate(indices):
             result = MeshCustomLoad()
+            result.cpu_positions = cpu_positions
+            result.cpu_indices = np.frombuffer(index.buffer(), dtype=np.uint32, count=len(index)).reshape(-1, 3).copy()
             
             result.VAO = gl_buffer(GL_INT, 1)
             glGenVertexArrays(1, result.VAO)

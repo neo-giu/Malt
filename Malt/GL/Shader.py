@@ -154,6 +154,26 @@ class UBO():
         glDeleteBuffers(1, self.buffer[0])
 
 
+class SSBO():
+
+    def __init__(self):
+        self.size = 0
+        self.buffer = gl_buffer(GL_INT, 1)
+        glGenBuffers(1, self.buffer)
+
+    def load_array(self, np_array):
+        self.size = np_array.nbytes
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, self.buffer[0])
+        glBufferData(GL_SHADER_STORAGE_BUFFER, self.size, np_array, GL_DYNAMIC_DRAW)
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0)
+
+    def bind(self, binding):
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, self.buffer[0])
+
+    def __del__(self):
+        glDeleteBuffers(1, self.buffer[0])
+
+
 def shader_preprocessor(shader_source, include_directories=[], definitions=[]):
     import tempfile, subprocess, sys, platform
 
