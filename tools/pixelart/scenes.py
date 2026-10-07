@@ -113,7 +113,7 @@ def _square_render(scene, size=360):
     scene.render.resolution_percentage = 100
 
 
-def box_plane(scene):
+def box_plane(scene, sun_degrees=30):
     # Top-down orthographic camera, 4 m over 360 px (90 px/m). Caster: 1 m quad at z=1, sun tilted 30 degrees around X
     # (light travels towards +y), so on the ground the shadow is the caster shifted by tan(30) m along +y.
     _clear(scene)
@@ -121,9 +121,17 @@ def box_plane(scene):
     _add(scene, 'Ground', _quad('Ground', 10.0))
     caster = _add(scene, 'Caster', _quad('Caster', 0.5))
     caster.location = (0, 0, 1)
-    _sun(scene, 30)
+    _sun(scene, sun_degrees)
     _camera(scene, (0, 0, 10), (0, 0, 0), ortho_scale=4.0)
     ray_traced(scene)
+
+
+def box_plane_60(scene):
+    box_plane(scene, 60)
+
+
+def box_plane_80(scene):
+    box_plane(scene, 80)
 
 
 def lit_sphere(scene):
@@ -230,3 +238,79 @@ def ray_traced_subd1_flatshadow(scene):
     _subdivision_level(scene, 1)
     ray_traced(scene)
     _set_node_input(scene, 'Ray Smooth Levels', 0)
+
+
+# --- Diagnosis (handoff Step 1) ---------------------------------------------------------------------------------------
+
+def _debug_material(scene):
+    # In memory: every mesh slot gets the ray_debug.mesh.glsl material (R = N.L > 0, G = shadowed, B = origin search)
+    import os
+    material = bpy.data.materials.new('RayDebug')
+    material.malt.material_type = 'Mesh'
+    material.malt.shader_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ray_debug.mesh.glsl')
+    for obj in scene.objects:
+        if obj.type == 'MESH':
+            if len(obj.material_slots) == 0:
+                obj.data.materials.append(material)
+            for slot in obj.material_slots:
+                slot.link = 'OBJECT'
+                slot.material = material
+    _setup_malt_ids()
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
+
+
+def ray_debug_subd4(scene):
+    _subdivision_level(scene, 4)
+    ray_traced(scene)
+    _debug_material(scene)
+
+
+def maps_debug_subd4(scene):
+    _subdivision_level(scene, 4)
+    shadow_maps(scene)
+    _debug_material(scene)
+
+
+def cycles_truth_subd4(scene):
+    # Ground truth: Cycles, hard sun (angle 0), direct light only, all samples at the pixel centre (filter 0.01 px).
+    # White = lit (smooth N.L > 0 and not shadowed), black = not lit.
+    _subdivision_level(scene, 4)
+    scene.render.engine = 'CYCLES'
+    scene.cycles.device = 'CPU'
+    scene.cycles.samples = 4
+    scene.cycles.use_adaptive_sampling = False
+    scene.cycles.use_denoising = False
+    scene.cycles.max_bounces = 0
+    scene.cycles.filter_width = 0.01
+    scene.cycles.pixel_filter_type = 'BOX'
+    scene.render.film_transparent = False
+    world = bpy.data.worlds.new('Black')
+    try:
+        world.use_nodes = True
+    except Exception:
+        pass
+    world.node_tree.nodes['Background'].inputs['Strength'].default_value = 0.0
+    scene.world = world
+    material = bpy.data.materials.new('Truth')
+    try:
+        material.use_nodes = True
+    except Exception:
+        pass
+    for obj in scene.objects:
+        if obj.type == 'MESH':
+            if len(obj.material_slots) == 0:
+                obj.data.materials.append(material)
+            for slot in obj.material_slots:
+                slot.link = 'OBJECT'
+                slot.material = material
+        if obj.type == 'LIGHT':
+            if obj.data.type == 'SUN':
+                obj.data.angle = 0.0
+                obj.data.energy = 10.0
+            else:
+                obj.hide_render = True
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'

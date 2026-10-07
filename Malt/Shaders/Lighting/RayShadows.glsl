@@ -124,7 +124,10 @@ void ray_setup(vec3 dir, out int kx, out int ky, out int kz, out float sx, out f
 }
 
 // Any-hit traversal. Same as RayBVH.occluded_ref. direction does not need to be normalized.
-bool ray_occluded(vec3 origin, vec3 dir, float t_max, uint self_id, bool self_shadows, uint light_group_bit)
+// Hits on object self_id with t <= self_t_min are ignored (self-intersection bias along the ray, not along the normal,
+// so the bias never moves a shadow edge).
+bool ray_occluded(vec3 origin, vec3 dir, float t_max, uint self_id, bool self_shadows, uint light_group_bit,
+    float self_t_min)
 {
     int kx, ky, kz;
     float sx, sy, sz;
@@ -174,7 +177,10 @@ bool ray_occluded(vec3 origin, vec3 dir, float t_max, uint self_id, bool self_sh
                 if(ray_triangle_hit(RAY_TRIS[t*4u].xyz, RAY_TRIS[t*4u+1u].xyz, RAY_TRIS[t*4u+2u].xyz,
                     origin, kx, ky, kz, sx, sy, sz, t_max, hit_t, hit_barycentric))
                 {
-                    return true;
+                    if(info.x != self_id || hit_t > self_t_min)
+                    {
+                        return true;
+                    }
                 }
             }
         }

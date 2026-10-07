@@ -134,7 +134,9 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             {
                 geometric_normal = -geometric_normal;
             }
-            vec3 ray_origin = surface + geometric_normal * RAY_BIAS_PX * pixel_size;
+            // Only a tiny normal offset (float safety). The real bias is a minimum hit distance along the ray, on
+            // the receiver's own object: it ignores self-intersection without moving any shadow edge.
+            vec3 ray_origin = surface + geometric_normal * 0.01 * pixel_size;
             vec3 ray_dir = -light.direction;
             float ray_t_max = 1e30;
             if(light.type != LIGHT_SUN)
@@ -146,7 +148,9 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             }
             int light_group = LIGHT_GROUP_INDEX(light_index);
             uint light_group_bit = (light_group >= 0 && light_group < 32) ? (1u << uint(light_group)) : 0u;
-            S.shadow = ray_occluded(ray_origin, ray_dir, ray_t_max, id, self_shadows, light_group_bit);
+            float ray_dir_length = length(ray_dir);
+            S.shadow = ray_occluded(ray_origin, ray_dir, ray_t_max, id, self_shadows, light_group_bit,
+                RAY_BIAS_PX * pixel_size / max(ray_dir_length, 1e-20));
         }
         else
         {

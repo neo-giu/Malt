@@ -199,8 +199,12 @@ def _ray_setup(direction):
 
 
 def _hit_triangles(tri_v, origin, direction, t_max, setup):
+    return _hit_triangles_t(tri_v, origin, direction, t_max, setup)[0]
+
+
+def _hit_triangles_t(tri_v, origin, direction, t_max, setup):
     # Watertight ray/triangle test (Woop, Benthin, Wald 2013), two-sided, float32 with a float64
-    # fallback when an edge function is exactly 0. tri_v: (K, 3, 3). Returns a (K,) bool mask: 0 < t <= t_max.
+    # fallback when an edge function is exactly 0. tri_v: (K, 3, 3). Returns a (K,) bool mask (0 < t <= t_max) and t.
     kx, ky, kz, sx, sy, sz = setup
     o = np.asarray(origin, dtype=np.float32)
     rel = tri_v.astype(np.float32) - o
@@ -226,7 +230,7 @@ def _hit_triangles(tri_v, origin, direction, t_max, setup):
     t_scaled = u * az + v * bz + w * cz
     with np.errstate(divide='ignore', invalid='ignore'):
         t = t_scaled / det
-    return ok & (t > 0) & (t <= np.float32(t_max))
+    return ok & (t > 0) & (t <= np.float32(t_max)), t
 
 
 def _blockers(info, self_id, self_shadows, light_group_bit):
@@ -236,7 +240,12 @@ def _blockers(info, self_id, self_shadows, light_group_bit):
     return mask
 
 
-def brute_occluded(tris, info, origin, direction, t_max, self_id, self_shadows, light_group_bit):
+def _real_hits(hit, t, info, self_id, self_t_min):
+    # Hits on the receiver's own object closer than self_t_min are self-intersection, not shadow
+    return hit & ~((info[:, 0] == np.uint32(self_id)) & (t <= np.float32(self_t_min)))
+
+
+def brute_occluded(tris, info, origin, direction, t_max, self_id, self_shadows, light_group_bit, self_t_min=0.0):
     tris = np.asarray(tris, dtype=np.float32).reshape(-1, 3, 3)
     info = np.asarray(info, dtype=np.uint32)
     if len(tris) == 0:
@@ -245,11 +254,12 @@ def brute_occluded(tris, info, origin, direction, t_max, self_id, self_shadows, 
     if not keep.any():
         return False
     setup = _ray_setup(direction)
-    return bool(_hit_triangles(tris[keep], origin, direction, t_max, setup).any())
+    hit, t = _hit_triangles_t(tris[keep], origin, direction, t_max, setup)
+    return bool(_real_hits(hit, t, info[keep], self_id, self_t_min).any())
 
 
-def occluded_ref(bvh, origin, direction, t_max, self_id, self_shadows, light_group_bit):
-    # Any-hit stack traversal, same as the GLSL one
+def occluded_ref(bvh, origin, direction, t_max, self_id, self_shadows, light_group_bit, self_t_min=0.0):
+    # Any-hit stack traversal, same as the GLSL one (ray_occluded)
     o = np.asarray(origin, dtype=np.float32)
     d = np.asarray(direction, dtype=np.float32)
     setup = _ray_setup(d)
@@ -276,7 +286,8 @@ def occluded_ref(bvh, origin, direction, t_max, self_id, self_shadows, light_gro
             keep = _blockers(bvh.info[sl], self_id, self_shadows, light_group_bit)
             if keep.any():
                 v = bvh.tris[sl, :3, :3][keep]
-                if _hit_triangles(v, o, d, t_max, setup).any():
+                hit, t = _hit_triangles_t(v, o, d, t_max, setup)
+                if _real_hits(hit, t, bvh.info[sl][keep], self_id, self_t_min).any():
                     return True
         else:
             stack.append(int(nodes_u[i, 3]))

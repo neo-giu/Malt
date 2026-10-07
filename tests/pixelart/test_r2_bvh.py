@@ -162,3 +162,15 @@ def test_build_time_120k():
     print('BUILD_TIME_120k_s=%.3f depth=%d nodes=%d' % (elapsed, bvh.depth, len(bvh.nodes)))
     assert bvh.depth <= 48
     assert elapsed < 30
+
+
+def test_self_t_min_ignores_only_near_self_hits():
+    # Triangle at t = 1 along the ray. self_t_min ignores it only for its own object and only when t <= self_t_min.
+    tri = np.array([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]], dtype=np.float32)
+    origin, direction = (0.25, 0.25, 1.0), (0.0, 0.0, -1.0)
+    info = make_info(1, ids=7, mask=1)
+    bvh = build_bvh(tri, info)
+    for occluded in (lambda *a: occluded_ref(bvh, *a), lambda *a: brute_occluded(tri, info, *a)):
+        assert not occluded(origin, direction, 1e30, 7, True, 1, 1.5)  # own object, near: ignored
+        assert occluded(origin, direction, 1e30, 7, True, 1, 0.5)  # own object, far enough: shadow
+        assert occluded(origin, direction, 1e30, 3, True, 1, 1.5)  # other object: never ignored
