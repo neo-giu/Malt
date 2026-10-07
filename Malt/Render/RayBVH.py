@@ -18,7 +18,9 @@ class BVH():
     # tris: (T, 4, 4) float32: v0, v1, v2 as vec4 (w = 0), in leaf order.
     # info: (T, 4) uint32: object id, shadow group bitmask, 0, 0.
     # depth: number of levels (a single leaf is 1).
-    def __init__(self, nodes, tris, info, depth):
+    def __init__(self, nodes, tris, info, depth, order=None):
+        # order: input triangle index of each output triangle (leaf order), to reorder per-triangle data
+        self.order = order if order is not None else np.zeros(0, dtype=np.int64)
         self.nodes = nodes
         self.tris = tris
         self.info = info
@@ -183,7 +185,7 @@ def build_bvh(tris, info):
     out_tris[:, :3, :3] = tris[order]
     out_info = np.zeros((count, 4), dtype=np.uint32)
     out_info[:, 0:2] = info[order]
-    return BVH(nodes, out_tris, out_info, depth)
+    return BVH(nodes, out_tris, out_info, depth, order)
 
 
 def _ray_setup(direction):

@@ -53,6 +53,11 @@ class SceneLighting(PipelineNode):
             Cast one exact hard shadow ray per pixel and light against the scene triangles (opaque materials only),
             instead of using shadow maps. For pixel-perfect shadows, also set *Samples.Grid Size* to 1.""")
 
+        inputs['Ray Smooth Levels'] = Parameter(0, Type.INT, doc="""
+            *Ray Traced* shadows: the shadow geometry is each triangle split into 4^levels and bent to follow the vertex
+            normals (Phong tessellation), so low-poly smooth-shaded meshes cast and receive smooth shadows. 0 = the
+            triangles as they are (default). Costs 4^levels more triangles.""")
+
         inputs['Ray Bias (px)'] = Parameter(1.0, Type.FLOAT, doc=
             "*Ray Traced* shadows: how far, in pixels, the ray origin is moved off the surface along the geometric normal.")
         return inputs
@@ -103,6 +108,7 @@ class SceneLighting(PipelineNode):
         ray_traced = bool(inputs['Ray Traced Shadows'])
         self.ray_shadows.enabled = ray_traced
         self.ray_shadows.bias_px = inputs['Ray Bias (px)']
+        self.ray_shadows.smooth_levels = max(0, min(4, int(inputs['Ray Smooth Levels'])))
         if ray_traced:
             # Executed once per AA sample, but the BVH only changes once per frame (cached by RayShadows)
             self.ray_shadows.update(scene, opaque_batches)

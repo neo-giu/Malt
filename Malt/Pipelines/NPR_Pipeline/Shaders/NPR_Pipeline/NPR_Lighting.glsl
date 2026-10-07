@@ -126,11 +126,15 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
         {
             // One exact yes/no ray per pixel and light. The bias is the same number of pixels everywhere.
             vec3 geometric_normal = true_normal();
+            float pixel_size = pixel_world_size(position);
+            // Start on the smooth shadow surface (Phong tessellated BVH), found along the geometric normal within
+            // 8 px, then lifted onto the vertex-normal surface (shadow terminator)
+            vec3 surface = ray_smooth_origin(position, geometric_normal, 8.0 * pixel_size, id);
             if(dot(geometric_normal, S.L) < 0.0)
             {
                 geometric_normal = -geometric_normal;
             }
-            vec3 ray_origin = position + geometric_normal * RAY_BIAS_PX * pixel_world_size(position);
+            vec3 ray_origin = surface + geometric_normal * RAY_BIAS_PX * pixel_size;
             vec3 ray_dir = -light.direction;
             float ray_t_max = 1e30;
             if(light.type != LIGHT_SUN)

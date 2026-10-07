@@ -154,3 +154,79 @@ def lit_sphere_maps(scene):
     # lit_sphere with shadow maps, as the reference for the ray traced one
     lit_sphere(scene)
     shadow_maps(scene)
+
+
+def _no_subdivision(scene):
+    # In memory only: turn off every Subdivision Surface modifier (low-poly shadow terminator test)
+    for obj in scene.objects:
+        for modifier in obj.modifiers:
+            if modifier.type == 'SUBSURF':
+                modifier.show_viewport = False
+                modifier.show_render = False
+
+
+def ray_traced_nosubd(scene):
+    _no_subdivision(scene)
+    ray_traced(scene)
+
+
+def shadow_maps_nosubd(scene):
+    _no_subdivision(scene)
+    shadow_maps(scene)
+
+
+def _subdivision_level(scene, level):
+    for obj in scene.objects:
+        for modifier in obj.modifiers:
+            if modifier.type == 'SUBSURF':
+                modifier.levels = level
+                modifier.render_levels = level
+
+
+def ray_traced_subd1(scene):
+    _subdivision_level(scene, 1)
+    ray_traced(scene)
+
+
+def shadow_maps_subd1(scene):
+    _subdivision_level(scene, 1)
+    shadow_maps(scene)
+
+
+def ray_traced_subd4(scene):
+    _subdivision_level(scene, 4)
+    ray_traced(scene)
+
+
+def shadow_maps_subd4(scene):
+    _subdivision_level(scene, 4)
+    shadow_maps(scene)
+
+
+def _set_node_input(scene, name, value):
+    tree = scene.world.malt_parameters.graphs['Render'].graph
+    for node in tree.nodes:
+        if name in node.inputs:
+            key = node.inputs[name].get_source_global_reference().replace('"', '')
+            tree.malt_parameters[key] = value
+
+
+def ray_traced_subd1_noshadow(scene):
+    # Diagnostic: a huge bias moves every ray origin far off the surface, so (almost) nothing is shadowed.
+    # Shows what the ramp alone draws.
+    _subdivision_level(scene, 1)
+    ray_traced(scene)
+    _set_node_input(scene, 'Ray Bias (px)', 100000.0)
+
+
+def ray_traced_subd4_noshadow(scene):
+    _subdivision_level(scene, 4)
+    ray_traced(scene)
+    _set_node_input(scene, 'Ray Bias (px)', 100000.0)
+
+
+def ray_traced_subd1_flatshadow(scene):
+    # Shadow geometry = the triangles as they are (no Phong tessellation), to compare with the default 2 levels
+    _subdivision_level(scene, 1)
+    ray_traced(scene)
+    _set_node_input(scene, 'Ray Smooth Levels', 0)

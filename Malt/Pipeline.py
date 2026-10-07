@@ -180,12 +180,14 @@ class Pipeline():
 
         # Copies, not views: the IPC buffers are reused
         cpu_positions = np.frombuffer(position.buffer(), dtype=np.float32, count=len(position)).reshape(-1, 3).copy()
+        cpu_normals = np.frombuffer(normal.buffer(), dtype=np.float32, count=len(normal)).reshape(-1, 3).copy()
 
         results = []
 
         for i, index in enumerate(indices):
             result = MeshCustomLoad()
             result.cpu_positions = cpu_positions
+            result.cpu_normals = cpu_normals
             result.cpu_indices = np.frombuffer(index.buffer(), dtype=np.uint32, count=len(index)).reshape(-1, 3).copy()
             
             result.VAO = gl_buffer(GL_INT, 1)
