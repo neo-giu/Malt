@@ -275,9 +275,30 @@ def maps_debug_subd4(scene):
 
 
 def cycles_truth_subd4(scene):
+    _subdivision_level(scene, 4)
+    cycles_truth(scene)
+
+
+def cycles_truth_subd1(scene):
+    _subdivision_level(scene, 1)
+    cycles_truth(scene)
+
+
+def ray_debug_subd1(scene):
+    _subdivision_level(scene, 1)
+    ray_traced(scene)
+    _debug_material(scene)
+
+
+def ray_debug(scene):
+    # The file's own subdivision levels
+    ray_traced(scene)
+    _debug_material(scene)
+
+
+def cycles_truth(scene):
     # Ground truth: Cycles, hard sun (angle 0), direct light only, all samples at the pixel centre (filter 0.01 px).
     # White = lit (smooth N.L > 0 and not shadowed), black = not lit.
-    _subdivision_level(scene, 4)
     scene.render.engine = 'CYCLES'
     scene.cycles.device = 'CPU'
     scene.cycles.samples = 4
@@ -286,7 +307,7 @@ def cycles_truth_subd4(scene):
     scene.cycles.max_bounces = 0
     scene.cycles.filter_width = 0.01
     scene.cycles.pixel_filter_type = 'BOX'
-    scene.render.film_transparent = False
+    scene.render.film_transparent = True  # alpha = coverage
     world = bpy.data.worlds.new('Black')
     try:
         world.use_nodes = True
