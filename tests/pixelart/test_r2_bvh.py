@@ -174,3 +174,32 @@ def test_self_t_min_ignores_only_near_self_hits():
         assert not occluded(origin, direction, 1e30, 7, True, 1, 1.5)  # own object, near: ignored
         assert occluded(origin, direction, 1e30, 7, True, 1, 0.5)  # own object, far enough: shadow
         assert occluded(origin, direction, 1e30, 3, True, 1, 1.5)  # other object: never ignored
+
+
+def test_morton_build_matches_brute_force():
+    rng = np.random.default_rng(3)
+    tris = random_soup(rng, 3000)
+    info = make_info(3000, ids=rng.integers(0, 8, 3000), mask=rng.integers(0, 4, 3000))
+    bvh = build_bvh(tris, info, method='morton')
+    assert sorted(bvh.order.tolist()) == list(range(3000))
+    for _ in range(500):
+        origin = rng.uniform(-14, 14, 3)
+        direction = rng.normal(size=3)
+        args = (origin, direction, 1e30, int(rng.integers(0, 8)), bool(rng.integers(0, 2)), int(rng.integers(1, 4)))
+        assert occluded_ref(bvh, *args) == brute_occluded(tris, info, *args)
+
+
+def test_morton_build_with_duplicate_centroids():
+    # All triangles at the same place: the build must still end (halving splits)
+    tri = np.array([[(0, 0, 0), (1, 0, 0), (0, 1, 0)]], dtype=np.float32)
+    tris = np.repeat(tri, 100, axis=0)
+    bvh = build_bvh(tris, make_info(100), method='morton')
+    assert occluded_ref(bvh, (0.25, 0.25, 1.0), (0.0, 0.0, -1.0), 1e30, 999, True, ALL_GROUPS)
+
+
+def test_morton_code_bit_interleave():
+    from Malt.Render.RayBVH import _spread_bits
+    values = np.array([0, 1, 2, 3, 0xFFFF, 0xA5A5], dtype=np.int64)
+    for value, spread in zip(values, _spread_bits(values)):
+        expected = sum(((int(value) >> i) & 1) << (3 * i) for i in range(16))
+        assert int(spread) == expected

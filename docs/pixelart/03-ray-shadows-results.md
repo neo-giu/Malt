@@ -54,16 +54,22 @@ error to remove in the shadow test. Smoother outlines need smoother shadow geome
 |---|---|---|
 | testmalt subd 1, 360 px | 2.4 s | 2.4 s |
 | testmalt subd 4, 360 px | 2.4 s | 4.5 s |
-| mannequin_malttest, 1920x1080 | 10.2 s | 35.0 s |
+| mannequin_malttest, 1920x1080, 1.18 M triangles, SAH build | 10.2 s | 22.0 s (BVH build 11.6 s) |
+| same, Morton build (since `RayBVH.SAH_MAX_TRIANGLES`) | 10.2 s | **14.5 s** (BVH build 4.1 s) |
 
 The mannequin camera shows only the floor and the sky (no character in frame), so the mannequin numbers are for cost
-only. The split between the per-frame BVH build and the GPU rays is not measured yet.
+only. The GPU rays cost well under 1 s; the per-frame BVH build is the cost.
+
+Morton build: above 200 000 triangles the BVH uses SAH for the top 4 levels (this isolates very large triangles such as
+a ground plane) and Morton code splits below. On a 200 k test scene it traces as well as full SAH (376 vs 402 node
+visits per ray). The mannequin image is identical to the SAH one (0 differing pixels).
 
 ## 6. Open items (owner decision)
 
 1. Shadow geometry from the render-level subdivision in the viewport (needs the evaluated render mesh on the server and
    a receiver-to-shadow-surface match; the own-triangle search does part of this).
-2. Speed: two-level BVH (per-mesh BVH built once, top level over instances).
+2. Speed: two-level BVH (per-mesh BVH built once, top level over instances), to skip the 4 s build when only
+   object transforms change.
 3. Stencil shadow volumes: not needed as a fallback now (the ray result matches Cycles). Still possible as a
    cross-check.
 4. Terminator policy at low subdivision (section 2): keep the clean band, or copy Cycles' partial offset.

@@ -6,7 +6,14 @@ import numpy as np
 
 BIN_COUNT = 12
 LEAF_SIZE = 4
-MAX_DEPTH = 48
+MAX_DEPTH = 40  # the GLSL traversal stack holds 48 entries; a traversal needs at most depth + 1
+# Above this triangle count the build uses Morton code splits (one sort, no SAH binning): about 10x faster to build,
+# a little slower to trace. Shadow rays are cheap, the per-frame build is not.
+SAH_MAX_TRIANGLES = 200000
+# The Morton build still uses SAH for the top levels: SAH isolates very large triangles (a ground plane), which would
+# otherwise inflate every Morton node box on their path.
+MORTON_SAH_LEVELS = 4
+MORTON_BITS = 16  # per axis, 48 bit codes (exact in float64)
 
 
 class BVH():
@@ -47,17 +54,104 @@ def _empty_bvh():
     return BVH(nodes, np.zeros((0, 4, 4), dtype=np.float32), np.zeros((0, 4), dtype=np.uint32), 1)
 
 
-def build_bvh(tris, info):
+def _spread_bits(x):
+    # Up to 21 bit integers -> every third bit of a 63 bit integer
+    x = x.astype(np.uint64) & np.uint64(0x1FFFFF)
+    x = (x | (x << np.uint64(32))) & np.uint64(0x1F00000000FFFF)
+    x = (x | (x << np.uint64(16))) & np.uint64(0x1F0000FF0000FF)
+    x = (x | (x << np.uint64(8))) & np.uint64(0x100F00F00F00F00F)
+    x = (x | (x << np.uint64(4))) & np.uint64(0x10C30C30C30C30C3)
+    x = (x | (x << np.uint64(2))) & np.uint64(0x1249249249249249)
+    return x
+
+
+def morton_codes(points):
+    pmin = points.min(axis=0)
+    extent = np.maximum(points.max(axis=0) - pmin, 1e-30)
+    scale = float((1 << MORTON_BITS) - 1)
+    q = np.clip(((points - pmin) / extent * scale).astype(np.int64), 0, (1 << MORTON_BITS) - 1)
+    return (_spread_bits(q[:, 0]) << np.uint64(2)) | (_spread_bits(q[:, 1]) << np.uint64(1)) | _spread_bits(q[:, 2])
+
+
+def _sah_partition(s_starts, s_counts, m, order, lo, hi, centroid):
+    # Binned SAH split of each node range; partitions order in place (left triangles first), returns the left counts
+    idx, offsets = _gather(s_starts, s_counts)
+    tri = order[idx]
+    seg = np.repeat(np.arange(m), s_counts)
+    c = centroid[tri]
+    cmin = np.minimum.reduceat(c, offsets, axis=0)
+    cmax = np.maximum.reduceat(c, offsets, axis=0)
+    extent = cmax - cmin
+    t_lo, t_hi = lo[tri], hi[tri]
+
+    costs = np.full((m, 3, BIN_COUNT - 1), np.inf)
+    bins = np.zeros((3, len(tri)), dtype=np.int64)
+    for axis in range(3):
+        scale = np.where(extent[:, axis] > 0, BIN_COUNT / np.maximum(extent[:, axis], 1e-30), 0.0)
+        b = np.floor((c[:, axis] - cmin[seg, axis]) * scale[seg]).astype(np.int64)
+        b = np.clip(b, 0, BIN_COUNT - 1)
+        bins[axis] = b
+        key = seg * BIN_COUNT + b
+        srt = np.argsort(key, kind='stable')
+        skey = key[srt]
+        first = np.flatnonzero(np.concatenate(([True], skey[1:] != skey[:-1])))
+        ukey = skey[first]
+        bin_min = np.full((m * BIN_COUNT, 3), np.inf)
+        bin_max = np.full((m * BIN_COUNT, 3), -np.inf)
+        bin_cnt = np.zeros(m * BIN_COUNT)
+        bin_min[ukey] = np.minimum.reduceat(t_lo[srt], first, axis=0)
+        bin_max[ukey] = np.maximum.reduceat(t_hi[srt], first, axis=0)
+        bin_cnt[ukey] = np.diff(np.append(first, len(srt)))
+        bin_min = bin_min.reshape(m, BIN_COUNT, 3)
+        bin_max = bin_max.reshape(m, BIN_COUNT, 3)
+        bin_cnt = bin_cnt.reshape(m, BIN_COUNT)
+        l_min = np.minimum.accumulate(bin_min, axis=1)[:, :-1]
+        l_max = np.maximum.accumulate(bin_max, axis=1)[:, :-1]
+        l_cnt = np.cumsum(bin_cnt, axis=1)[:, :-1]
+        r_min = np.minimum.accumulate(bin_min[:, ::-1], axis=1)[:, ::-1][:, 1:]
+        r_max = np.maximum.accumulate(bin_max[:, ::-1], axis=1)[:, ::-1][:, 1:]
+        r_cnt = np.cumsum(bin_cnt[:, ::-1], axis=1)[:, ::-1][:, 1:]
+        with np.errstate(invalid='ignore'):
+            cost = np.where(l_cnt > 0, _half_area(l_min, l_max), 0) * l_cnt \
+                + np.where(r_cnt > 0, _half_area(r_min, r_max), 0) * r_cnt
+        costs[:, axis] = np.where((l_cnt > 0) & (r_cnt > 0), cost, np.inf)
+
+    flat = costs.reshape(m, -1)
+    best = flat.argmin(axis=1)
+    valid = np.isfinite(flat[np.arange(m), best])
+    best_axis, best_bin = best // (BIN_COUNT - 1), best % (BIN_COUNT - 1)
+
+    # Side of each triangle: SAH split, or an arbitrary halving when all centroids coincide
+    sah_side = bins[best_axis[seg], np.arange(len(tri))] > best_bin[seg]
+    position = np.arange(len(tri)) - offsets[seg]
+    half_side = position >= (s_counts[seg] + 1) // 2
+    side = np.where(valid[seg], sah_side, half_side)
+
+    # Stable partition of every node range: left triangles first
+    srt = np.argsort(seg * 2 + side, kind='stable')
+    order[idx] = tri[srt]
+    left_count = np.bincount(seg, weights=~side, minlength=m).astype(np.int64)
+    return left_count
+
+
+def build_bvh(tris, info, method='auto'):
+    # method: 'sah', 'morton' or 'auto' (SAH up to SAH_MAX_TRIANGLES)
     tris = np.ascontiguousarray(tris, dtype=np.float32).reshape(-1, 3, 3)
     info = np.asarray(info, dtype=np.uint32).reshape(-1, 2)
     count = len(tris)
     if count == 0:
         return _empty_bvh()
+    morton = method == 'morton' or (method == 'auto' and count > SAH_MAX_TRIANGLES)
 
     lo = tris.min(axis=1)
     hi = tris.max(axis=1)
     centroid = (lo + hi) * 0.5
     order = np.arange(count)
+    sorted_codes = None
+    if morton:
+        codes = morton_codes(centroid)
+        order = np.argsort(codes, kind='stable')
+        codes = codes.astype(np.float64)  # exact (48 bits), for frexp and searchsorted
 
     # Breadth-first, one numpy pass per level. Node ids of a level are contiguous.
     node_start = [np.array([0])]
@@ -84,62 +178,29 @@ def build_bvh(tris, info):
         s_nodes = np.flatnonzero(split)
         s_starts, s_counts = starts[s_nodes], counts[s_nodes]
         m = len(s_nodes)
-        idx, offsets = _gather(s_starts, s_counts)
-        tri = order[idx]
-        seg = np.repeat(np.arange(m), s_counts)
-        c = centroid[tri]
-        cmin = np.minimum.reduceat(c, offsets, axis=0)
-        cmax = np.maximum.reduceat(c, offsets, axis=0)
-        extent = cmax - cmin
-        t_lo, t_hi = lo[tri], hi[tri]
+        if morton and depth > MORTON_SAH_LEVELS:
+            # Split at the highest bit where the first and the last code of the range differ (ranges are sorted)
+            if sorted_codes is None:
+                sorted_codes = codes[order]  # order does not change from here on
+            first = sorted_codes[s_starts]
+            last = sorted_codes[s_starts + s_counts - 1]
+            diff = (first.astype(np.uint64) ^ last.astype(np.uint64)).astype(np.float64)
+            bit = np.frexp(diff)[1] - 1  # highest set bit; -1 when equal
+            step = np.exp2(np.maximum(bit, 0))
+            high = np.floor(last / step) * step
+            # First position in each range with a code >= high (vectorized bisection)
+            below, above = s_starts.copy(), s_starts + s_counts - 1
+            while np.any(below < above):
+                mid = (below + above) // 2
+                go_right = sorted_codes[mid] < high
+                below = np.where(go_right, mid + 1, below)
+                above = np.where(go_right, above, mid)
+            left_count = np.where(bit >= 0, below - s_starts, (s_counts + 1) // 2)
+            left_count = np.clip(left_count, 1, s_counts - 1)
+        else:
+            # The partition is stable, so with the Morton build every range stays sorted by code
+            left_count = _sah_partition(s_starts, s_counts, m, order, lo, hi, centroid)
 
-        costs = np.full((m, 3, BIN_COUNT - 1), np.inf)
-        bins = np.zeros((3, len(tri)), dtype=np.int64)
-        for axis in range(3):
-            scale = np.where(extent[:, axis] > 0, BIN_COUNT / np.maximum(extent[:, axis], 1e-30), 0.0)
-            b = np.floor((c[:, axis] - cmin[seg, axis]) * scale[seg]).astype(np.int64)
-            b = np.clip(b, 0, BIN_COUNT - 1)
-            bins[axis] = b
-            key = seg * BIN_COUNT + b
-            srt = np.argsort(key, kind='stable')
-            skey = key[srt]
-            first = np.flatnonzero(np.concatenate(([True], skey[1:] != skey[:-1])))
-            ukey = skey[first]
-            bin_min = np.full((m * BIN_COUNT, 3), np.inf)
-            bin_max = np.full((m * BIN_COUNT, 3), -np.inf)
-            bin_cnt = np.zeros(m * BIN_COUNT)
-            bin_min[ukey] = np.minimum.reduceat(t_lo[srt], first, axis=0)
-            bin_max[ukey] = np.maximum.reduceat(t_hi[srt], first, axis=0)
-            bin_cnt[ukey] = np.diff(np.append(first, len(srt)))
-            bin_min = bin_min.reshape(m, BIN_COUNT, 3)
-            bin_max = bin_max.reshape(m, BIN_COUNT, 3)
-            bin_cnt = bin_cnt.reshape(m, BIN_COUNT)
-            l_min = np.minimum.accumulate(bin_min, axis=1)[:, :-1]
-            l_max = np.maximum.accumulate(bin_max, axis=1)[:, :-1]
-            l_cnt = np.cumsum(bin_cnt, axis=1)[:, :-1]
-            r_min = np.minimum.accumulate(bin_min[:, ::-1], axis=1)[:, ::-1][:, 1:]
-            r_max = np.maximum.accumulate(bin_max[:, ::-1], axis=1)[:, ::-1][:, 1:]
-            r_cnt = np.cumsum(bin_cnt[:, ::-1], axis=1)[:, ::-1][:, 1:]
-            with np.errstate(invalid='ignore'):
-                cost = np.where(l_cnt > 0, _half_area(l_min, l_max), 0) * l_cnt \
-                    + np.where(r_cnt > 0, _half_area(r_min, r_max), 0) * r_cnt
-            costs[:, axis] = np.where((l_cnt > 0) & (r_cnt > 0), cost, np.inf)
-
-        flat = costs.reshape(m, -1)
-        best = flat.argmin(axis=1)
-        valid = np.isfinite(flat[np.arange(m), best])
-        best_axis, best_bin = best // (BIN_COUNT - 1), best % (BIN_COUNT - 1)
-
-        # Side of each triangle: SAH split, or an arbitrary halving when all centroids coincide
-        sah_side = bins[best_axis[seg], np.arange(len(tri))] > best_bin[seg]
-        position = np.arange(len(tri)) - offsets[seg]
-        half_side = position >= (s_counts[seg] + 1) // 2
-        side = np.where(valid[seg], sah_side, half_side)
-
-        # Stable partition of every node range: left triangles first
-        srt = np.argsort(seg * 2 + side, kind='stable')
-        order[idx] = tri[srt]
-        left_count = np.bincount(seg, weights=~side, minlength=m).astype(np.int64)
 
         child_start = np.empty(2 * m, dtype=np.int64)
         child_count = np.empty(2 * m, dtype=np.int64)

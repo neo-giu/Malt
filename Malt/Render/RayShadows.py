@@ -104,6 +104,7 @@ class RayShadows():
         if self.gpu:
             self._upload(self.bvh)
         self.build_ms = (time.perf_counter() - start) * 1000.0
+        print("RAY_SHADOWS build: %d triangles, depth %d, %.1f ms" % (self.triangle_count, self.bvh.depth, self.build_ms), flush=True)
         return True
 
     def _upload(self, bvh):
