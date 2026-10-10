@@ -413,3 +413,31 @@ def lines_off(scene):
     _solo(scene, [bpy.data.objects['Suzanne']])
     _frame_objects(scene, [bpy.data.objects['Suzanne']], 256)
     _set_line_width(scene, 0.0)
+
+
+def _debug_shader(scene, filename):
+    import os
+    material = bpy.data.materials.new('PixelCelDebug')
+    material.malt.material_type = 'Mesh'
+    material.malt.shader_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+    for obj in scene.objects:
+        if obj.type == 'MESH':
+            if len(obj.material_slots) == 0:
+                obj.data.materials.append(material)
+            for slot in obj.material_slots:
+                slot.link = 'OBJECT'
+                slot.material = material
+    _setup_malt_ids()
+    scene.view_settings.view_transform = 'Standard'
+    scene.view_settings.look = 'None'
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.gamma = 1.0
+
+
+def pixel_cel_debug(scene):
+    # Suzanne alone, 256 px, ray traced shadows, the pixel_cel debug material
+    ray_traced(scene)
+    suzanne = [bpy.data.objects['Suzanne']]
+    _solo(scene, suzanne)
+    _frame_objects(scene, suzanne, 256)
+    _debug_shader(scene, 'pixel_cel_debug.mesh.glsl')

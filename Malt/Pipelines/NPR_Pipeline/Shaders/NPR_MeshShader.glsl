@@ -292,3 +292,4 @@ void main()
 
 #include "NPR_Pipeline/NPR_Mesh.glsl"
 #include "NPR_Pipeline/NPR_Shading2.glsl"
+#include "NPR_Pipeline/PixelCel.glsl"

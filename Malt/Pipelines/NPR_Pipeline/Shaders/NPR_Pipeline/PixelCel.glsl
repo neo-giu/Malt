@@ -1,0 +1,202 @@
+// Malt/Pipelines/NPR_Pipeline/Shaders/NPR_Pipeline/PixelCel.glsl
+#ifndef PIXEL_CEL_GLSL
+#define PIXEL_CEL_GLSL
+
+#include "NPR_Lighting.glsl"
+#include "Common/Color.glsl"
+
+/*  META GLOBAL
+    @meta: category=Shading;
+*/
+
+// Pixel Cel: cel-shaded pixel-art material (docs/pixelart/05-pixel-cel-materials-spec.md, section 3).
+// Same rules as Malt/PixelArt/cel_ref.py: keep them in sync.
+
+#define PIXEL_CEL_TONE_SHADOW 0
+#define PIXEL_CEL_TONE_MID 1
+#define PIXEL_CEL_TONE_LIT 2
+#define PIXEL_CEL_TONE_HIGHLIGHT 3
+
+vec4 _pixel_cel_sample(sampler2D tex, vec2 uv, bool nearest)
+{
+    if(nearest)
+    {
+        ivec2 size = textureSize(tex, 0);
+        ivec2 texel = ivec2(floor(fract(uv) * vec2(size)));
+        return texelFetch(tex, clamp(texel, ivec2(0), size - 1), 0);
+    }
+    return texture(tex, uv);
+}
+
+// KOF XIII shadow colour: hue moved toward blue-purple (260 degrees) by at most hue_shift degrees, then saturation
+// and value scaled. HSV is in sRGB space (Malt rgb_to_hsv), like cel_ref.shifted_shadow.
+vec3 _pixel_cel_shifted_shadow(vec3 base, float hue_shift, float saturation, float value)
+{
+    vec3 hsv = rgb_to_hsv(base);
+    float d = 260.0 / 360.0 - hsv.x;
+    d -= round(d);
+    hsv.x = fract(hsv.x + min(hue_shift / 360.0, abs(d)) * (d >= 0.0 ? 1.0 : -1.0));
+    hsv.y = clamp(hsv.y * saturation, 0.0, 1.0);
+    hsv.z *= value;
+    return hsv_to_rgb(hsv);
+}
+
+int _pixel_cel_tone(float n_dot_l, float n_dot_h, float offset, float threshold, bool light_shadowed,
+    bool use_ramp, sampler1D ramp, float spec_mask, float spec_size, float spec_threshold, float highlight_threshold,
+    out float t)
+{
+    float s = n_dot_l * 0.5 + 0.5 + offset;
+    t = 0.0;
+    if(light_shadowed)
+    {
+        return PIXEL_CEL_TONE_SHADOW;
+    }
+    int tone;
+    if(use_ramp)
+    {
+        t = texture(ramp, clamp(s, 0.0, 1.0)).r;
+        tone = t < 0.25 ? PIXEL_CEL_TONE_SHADOW : (t < 0.75 ? PIXEL_CEL_TONE_MID : PIXEL_CEL_TONE_LIT);
+    }
+    else
+    {
+        bool lit = s > threshold;
+        t = lit ? 1.0 : 0.0;
+        tone = lit ? PIXEL_CEL_TONE_LIT : PIXEL_CEL_TONE_SHADOW;
+    }
+    if(tone == PIXEL_CEL_TONE_LIT)
+    {
+        if(s > highlight_threshold)
+        {
+            tone = PIXEL_CEL_TONE_HIGHLIGHT;
+        }
+        float exponent = mix(4.0, 128.0, spec_size);
+        if(spec_mask > 0.0 && spec_mask * pow(max(n_dot_h, 0.0), exponent) > spec_threshold)
+        {
+            tone = PIXEL_CEL_TONE_HIGHLIGHT;
+        }
+    }
+    return tone;
+}
+
+/*  META
+    @meta: label=Pixel Cel;
+    @base_color: subtype=Color; default=vec4(1.0);
+    @use_base_texture: default=false;
+    @use_shadow_texture: default=false;
+    @use_ilm_texture: default=false;
+    @use_cutout: default=false;
+    @cutout: default=0.5;
+    @uv_index: default=0;
+    @use_vertex_color: default=false;
+    @vertex_color_index: default=0;
+    @nearest: default=false;
+    @shadow_tint: subtype=Color; default=vec3(0.55, 0.5, 0.7);
+    @shadow_from_hue_shift: default=false;
+    @hue_shift: default=15.0;
+    @shadow_saturation: default=1.25;
+    @shadow_value: default=0.55;
+    @threshold: default=0.5;
+    @use_ramp: default=false;
+    @spec_threshold: default=0.5;
+    @spec_boost: default=1.3;
+    @highlight_threshold: default=2.0;
+    @highlight_color: subtype=Color; default=vec3(1.0, 0.97, 0.9);
+    @highlight_mix: default=0.0;
+    @outline_from_base: default=false;
+    @outline_value: default=0.1;
+    @unlit: default=false;
+    @light_group: default=1;
+    @shadows: default=true;
+    @self_shadows: default=true;
+*/
+void pixel_cel(
+    vec4 base_color, bool use_base_texture, sampler2D base_texture,
+    bool use_shadow_texture, sampler2D shadow_texture,
+    bool use_ilm_texture, sampler2D ilm_texture,
+    bool use_cutout, float cutout,
+    int uv_index, bool use_vertex_color, int vertex_color_index, bool nearest,
+    vec3 shadow_tint, bool shadow_from_hue_shift, float hue_shift, float shadow_saturation, float shadow_value,
+    float threshold, bool use_ramp, sampler1D ramp,
+    float spec_threshold, float spec_boost,
+    float highlight_threshold, vec3 highlight_color, float highlight_mix,
+    bool outline_from_base, float outline_value,
+    bool unlit, int light_group, bool shadows, bool self_shadows,
+    out vec4 color, out vec4 line_color, out vec4 line_data, out int tone, out bool shadowed)
+{
+    vec2 uv = UV[uv_index];
+    vec4 base = base_color;
+    if(use_base_texture)
+    {
+        base *= _pixel_cel_sample(base_texture, uv, nearest);
+    }
+    vec3 tint = use_shadow_texture ? _pixel_cel_sample(shadow_texture, uv, nearest).rgb : shadow_tint;
+    vec4 ilm = use_ilm_texture ? _pixel_cel_sample(ilm_texture, uv, nearest) : vec4(0.0, 0.5, 0.0, 1.0);
+    vec4 vertex_color = use_vertex_color ? COLOR[vertex_color_index] : vec4(1.0);
+    float offset = use_ilm_texture ? ilm.g * vertex_color.r - 0.5 : 0.0;
+    vec3 shadow_color = shadow_from_hue_shift
+        ? _pixel_cel_shifted_shadow(base.rgb, hue_shift, shadow_saturation, shadow_value)
+        : base.rgb * tint;
+
+    line_color = vec4(outline_from_base ? base.rgb * outline_value : vec3(outline_value), 1.0);
+    line_data = vec4(use_ilm_texture ? ilm.a : 1.0, (use_vertex_color && vertex_color.a < 0.5) ? 0.0 : 1.0, 0.0, 1.0);
+    shadowed = false;
+
+    if(unlit)
+    {
+        color = base;
+        tone = PIXEL_CEL_TONE_LIT;
+        return;
+    }
+
+    tone = -1;
+    float best_t = 0.0;
+    for(int i = 0; i < LIGHTS.lights_count; i++)
+    {
+        if(LIGHT_GROUP_INDEX(i) != light_group)
+        {
+            continue;
+        }
+        Light L = LIGHTS.lights[i];
+        LitSurface LS = npr_lit_surface(POSITION, NORMAL, ID.x, L, i, shadows, self_shadows);
+        bool light_shadowed = shadows && LS.shadow;
+        shadowed = shadowed || light_shadowed;
+        float t;
+        int light_tone = _pixel_cel_tone(LS.NoL, dot(NORMAL, LS.H), offset, threshold, light_shadowed,
+            use_ramp, ramp, use_ilm_texture ? ilm.r : 0.0, use_ilm_texture ? ilm.b : 0.0, spec_threshold,
+            highlight_threshold, t);
+        if(light_tone > tone)
+        {
+            tone = light_tone;
+            best_t = t;
+        }
+    }
+    if(tone < 0)
+    {
+        tone = PIXEL_CEL_TONE_SHADOW;
+    }
+
+    vec3 rgb = tone == PIXEL_CEL_TONE_HIGHLIGHT
+        ? mix(base.rgb * spec_boost, highlight_color, highlight_mix)
+        : mix(shadow_color, base.rgb, best_t);
+    if(use_ilm_texture && ilm.a <= 0.5)
+    {
+        rgb *= ilm.a;
+    }
+    color = vec4(rgb, base.a);
+}
+
+/*  META
+    @meta: label=Pixel Cel Opacity;
+    @use_cutout: default=false;
+    @cutout: default=0.5;
+*/
+float pixel_cel_opacity(sampler2D texture_, int uv_index, bool use_cutout, float cutout)
+{
+    if(!use_cutout)
+    {
+        return 1.0;
+    }
+    return texture(texture_, UV[uv_index]).a >= cutout ? 1.0 : 0.0;
+}
+
+#endif //PIXEL_CEL_GLSL
