@@ -441,3 +441,43 @@ def pixel_cel_debug(scene):
     _solo(scene, suzanne)
     _frame_objects(scene, suzanne, 256)
     _debug_shader(scene, 'pixel_cel_debug.mesh.glsl')
+
+
+def _convert_all(scene, preset):
+    from BlenderMalt import PixelArtConvert
+    _setup_malt_ids()
+    report = PixelArtConvert.convert_objects([o for o in scene.objects if o.type == 'MESH'], preset)
+    print('PIXEL_CEL_REPORT', report, flush=True)
+    return report
+
+
+def pixel_cel_convert_asw(scene):
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _convert_all(scene, 'ASW')
+
+
+def pixel_cel_convert_kof(scene):
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _convert_all(scene, 'KOF XIII')
+
+
+def pixel_cel_convert_arthur(scene):
+    ray_traced(scene)
+    arthur = _collection_objects('arthurmodel')
+    _solo(scene, arthur)
+    _frame_objects(scene, arthur, 256)
+    _convert_all(scene, 'ASW')
+
+
+def pixel_cel_convert_dude(scene):
+    ray_traced(scene)
+    dude = _collection_objects('Dudemodel')
+    _solo(scene, dude)
+    _frame_objects(scene, dude, 256)
+    _convert_all(scene, 'ASW')
