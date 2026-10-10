@@ -346,6 +346,10 @@ def convert_objects(objects, preset='ASW'):
             done.add(material.name)
             plan, tree = convert_material(material, preset, trees)
             report.append((material.name, plan.style, sorted(plan.textures), plan.warnings, tree.name))
+        # Malt uploads a vertex colour only when the mesh names it (Malt Vertex Colors); without it COLOR[0] is 0,
+        # the ASW offset becomes -0.5 and nothing is lit. pixel_cel reads vertex_color_index 0.
+        if obj.type == 'MESH' and 'Col' in obj.data.color_attributes and not obj.data.malt_vertex_color_override_0:
+            obj.data.malt_vertex_color_override_0 = 'Col'
     from BlenderMalt import MaltMaterial
     # Compile the shaders of the materials just assigned, synchronously: a render right after a conversion must not
     # run before the shaders exist
