@@ -11,6 +11,8 @@ see it fail (quote the failing line), implement, see it pass, commit once.
 
 Batch: ONE launch per tuning round with setups `pixel_cel_both_styles,pixel_cel_both_styles_off,lines_w1` (lines_w1 gives the Suzanne frame time for criterion 6) into build/pixelart/P/t08_<round>/; at most 3 rounds. Do not copy files into H:/GameDev/Pixelizer (the orchestrator does that): skip the plan's copy step and say so. Do not push.
 
+Orchestrator facts from T07 (build/pixelart/P/t07/pixel_lines_on): the ASW outline renders as sRGB (89, 89, 89) on 1405 of 1457 line px, because outline_value 0.1 is applied as a linear colour. The spec means near black on screen: make the ASW outline read about sRGB 25 (linear ~0.01) and check KOF the same way (base x0.35 in display terms). Measure the outline colour in the Report.
+
 ## Read first (and only)
 - docs/specs/pixelcel/tasks/RULES.md (whole)
 - docs/pixelart/06-pixel-cel-plan.md: the header, "Global Constraints", "Review Focus", "File Structure" and
