@@ -335,3 +335,81 @@ def cycles_truth(scene):
                 obj.hide_render = True
     scene.view_settings.view_transform = 'Standard'
     scene.view_settings.look = 'None'
+
+
+# --- Line probe (Pixel Cel plan, task 1) -------------------------------------------------------------------------------
+
+def _set_line_width(scene, width):
+    # In memory: every Line Width (line_width_2) node of every Malt mesh tree gets width_scale = width, Pixel units
+    for tree in bpy.data.node_groups:
+        if tree.bl_idname != 'MaltTree':
+            continue
+        for node in tree.nodes:
+            if getattr(node, 'function_type', '').endswith('line_width_2'):
+                key = node.inputs['width_scale'].get_source_global_reference().replace('"', '')
+                tree.malt_parameters[key] = float(width)
+                # Materials keep their own copy of the tree parameters (the material panel values)
+                for material in bpy.data.materials:
+                    if material.malt.shader_nodes is tree and key in material.malt_parameters.keys():
+                        material.malt_parameters[key] = float(width)
+
+
+
+
+def _frame_objects(scene, objects, height_px=256, margin=0.05):
+    # In memory: a new orthographic front camera (looking along +Y) framing the world bounding box of objects.
+    # Resolution: height_px tall, width from the box aspect (even number of pixels).
+    import mathutils
+    points = []
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    for obj in objects:
+        evaluated = obj.evaluated_get(depsgraph)
+        points += [evaluated.matrix_world @ mathutils.Vector(corner) for corner in evaluated.bound_box]
+    xs, ys, zs = [p.x for p in points], [p.y for p in points], [p.z for p in points]
+    width, height = max(xs) - min(xs), max(zs) - min(zs)
+    height_world = max(height, 1e-6) * (1.0 + 2.0 * margin)
+    width_world = max(width, 1e-6) * (1.0 + 2.0 * margin)
+    width_px = max(2, int(math.ceil(height_px * width_world / height_world / 2.0)) * 2)
+    scene.render.resolution_x = width_px
+    scene.render.resolution_y = height_px
+    scene.render.resolution_percentage = 100
+    center = ((max(xs) + min(xs)) / 2, min(ys) - 10.0, (max(zs) + min(zs)) / 2)
+    camera = _camera(scene, center, (90, 0, 0), ortho_scale=max(height_world, width_world))
+    camera.data.sensor_fit = 'AUTO'
+    camera.data.clip_end = 1000.0
+    return camera
+
+
+def _solo(scene, objects):
+    # In memory: hide every other mesh object from the render
+    keep = set(o.name for o in objects)
+    for obj in scene.objects:
+        if obj.type == 'MESH' and obj.name not in keep:
+            obj.hide_render = True
+    # The kept objects' collections (and their parents) must render
+    parents = {child.name: coll for coll in bpy.data.collections for child in coll.children}
+    for obj in objects:
+        obj.hide_render = False
+        for coll in obj.users_collection:
+            while coll is not None:
+                coll.hide_render = False
+                coll = parents.get(coll.name)
+
+
+def _collection_objects(name):
+    collection = bpy.data.collections[name]
+    return [obj for obj in collection.all_objects if obj.type == 'MESH']
+
+
+def lines_w1(scene):
+    ray_traced(scene)
+    _solo(scene, [bpy.data.objects['Suzanne']])
+    _frame_objects(scene, [bpy.data.objects['Suzanne']], 256)
+    _set_line_width(scene, 1.0)
+
+
+def lines_off(scene):
+    ray_traced(scene)
+    _solo(scene, [bpy.data.objects['Suzanne']])
+    _frame_objects(scene, [bpy.data.objects['Suzanne']], 256)
+    _set_line_width(scene, 0.0)

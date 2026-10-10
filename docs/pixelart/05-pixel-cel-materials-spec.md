@@ -122,10 +122,14 @@ doubled pixels where lines meet, no gaps).
   width. There is no width input.
 - Check: every line pixel set is 1 px wide (no 2x2 block of line pixels, no line pixel with line neighbours on two
   opposite sides across the line), checked per pixel in the render tests, in still frames and in animation frames.
-- Method: Malt's Line Width node is used only if a render test shows it meets this rule at width 1. If it does not,
-  Pixel Cel gets its own 1 px line decision (the silhouette rule from Pixelizer `contour_lines`: half-pixel lattice
-  coverage, diamond rule, 8-connected), decided per pixel in the main pass (not a post filter). The plan's first task
-  measures which case applies.
+- Method (decided by the line probe, 2026-10-10): Malt's own Line Width node at width 1 breaks the rule (Suzanne,
+  256 px: 1302 line px, 0 2x2 blocks, but 12 L-corner pixels, 18 gap ends, 12 isolated pixels). So lines come from a
+  new render-layer node **Pixel Lines**: the pre pass is rendered once more on the half-pixel lattice
+  ((2W+1) x (2H+1), the Pixelizer `contour_lines` method); a pixel is an outline pixel when the 5 lattice samples of
+  its diamond disagree (different ID, or a depth step); inner lines come from the ilm A value written by the main pass,
+  thinned to its 1 px centre line (non-maximum suppression across the line). Then L corners are thinned
+  (pixel-perfect) and line pieces under 3 px are dropped. This is the line decision itself (like Malt's LineRender
+  node), not a filter on the colours: only line pixels change.
 Decal meshes: alpha cutout at 0.5 (Opacity Mask in the pre pass, no blending).
 
 ## 4. Converter
