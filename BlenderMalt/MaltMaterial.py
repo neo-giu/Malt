@@ -172,6 +172,7 @@ class MALT_PT_MaterialSettings(bpy.types.Panel):
                 row.operator("object.material_slot_select", text="Select")
                 row.operator("object.material_slot_deselect", text="Deselect")
         
+        layout.operator('malt.convert_pixel_art')
         if context.material:
             context.material.malt.draw_ui(layout, '.mesh.glsl', context.material.malt_parameters)
 

@@ -1,6 +1,7 @@
 # BlenderMalt/PixelArtConvert.py
 # Converts Blender materials to Malt Pixel Cel materials (docs/pixelart/05-pixel-cel-materials-spec.md).
 # Never touches the original Cycles/EEVEE nodes: only material.malt.shader_nodes is set.
+import hashlib
 import json
 import os
 
@@ -196,12 +197,95 @@ def build_tree(plan, preset, name):
     return tree
 
 
+def original_hash(material):
+    tree = material.node_tree
+    if tree is None:
+        return 'no-nodes'
+    parts = []
+    for node in sorted(tree.nodes, key=lambda n: n.name):
+        parts.append(f'{node.name}:{node.type}:{getattr(getattr(node, "image", None), "name", "")}')
+        for socket in node.inputs:
+            value = getattr(socket, 'default_value', None)
+            try:
+                value = tuple(value)
+            except TypeError:
+                pass
+            parts.append(f'  {socket.identifier}={value}')
+    for link in tree.links:
+        parts.append(f'{link.from_node.name}.{link.from_socket.identifier}->{link.to_node.name}.{link.to_socket.identifier}')
+    return hashlib.sha1('\n'.join(parts).encode()).hexdigest()
+
+
+def _current(tree, key):
+    params = tree.malt_parameters
+    if key in params.bools.keys():
+        return params.bools[key].boolean
+    if key in params.textures.keys():
+        texture = params.textures[key].texture
+        return 'image:' + texture.name if texture else None
+    if key in params.gradients.keys():
+        ramp = params.gradients[key].texture.color_ramp
+        return [[round(e.position, 6), round(e.color[0], 6)] for e in ramp.elements]
+    value = params.get(key)
+    try:
+        return list(value)
+    except TypeError:
+        return value
+
+
+def _same(a, b):
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+    if isinstance(a, float) or isinstance(b, float):
+        return a is not None and b is not None and abs(float(a) - float(b)) < 1e-6
+    return a == b
+
+
+def update_tree(tree, plan, preset):
+    # Rebuild into a scratch tree, then copy each value whose current value is still the one the converter wrote
+    old = json.loads(tree.get('pixel_cel_set', '{}'))
+    scratch = build_tree(plan, preset, tree.name + ' (scratch)')
+    new = json.loads(scratch['pixel_cel_set'])
+    kept = []
+    for key, value in new.items():
+        if key in old and not _same(_current(tree, key), old[key]):
+            kept.append(key)
+            continue
+        params = tree.malt_parameters
+        if isinstance(value, str) and value.startswith('image:'):
+            params.textures[key].texture = bpy.data.images[value[len('image:'):]]
+        elif isinstance(value, bool):
+            params.bools[key].boolean = value
+        elif key in scratch.malt_parameters.gradients.keys():
+            src = scratch.malt_parameters.gradients[key].texture.color_ramp
+            dst = params.gradients[key].texture.color_ramp
+            dst.interpolation = src.interpolation
+            while len(dst.elements) > 1:
+                dst.elements.remove(dst.elements[-1])
+            dst.elements[0].position, dst.elements[0].color = src.elements[0].position, src.elements[0].color
+            for element in src.elements[1:]:
+                dst.elements.new(element.position).color = element.color
+        else:
+            params[key] = value
+    kept_values = {k: old[k] for k in kept}
+    new.update(kept_values)
+    tree['pixel_cel_set'] = json.dumps(new)
+    bpy.data.node_groups.remove(scratch)
+    return kept
+
+
 def convert_material(material, preset='ASW', trees=None):
     plan = detect(describe_material(material))
     trees = {} if trees is None else trees
     key = plan.key + '|' + preset
     if key not in trees:
-        trees[key] = build_tree(plan, preset, f'PixelCel {preset} {material.name}')
+        existing = material.malt.shader_nodes
+        if existing is not None and existing.get('pixel_cel_preset') == preset and existing.get('pixel_cel_key') == plan.key:
+            update_tree(existing, plan, preset)
+            trees[key] = existing
+        else:
+            trees[key] = build_tree(plan, preset, f'PixelCel {preset} {material.name}')
+            trees[key]['pixel_cel_key'] = plan.key
     material.malt.material_type = 'Mesh'
     material.malt.shader_nodes = trees[key]
     return plan, trees[key]
@@ -224,3 +308,102 @@ def convert_objects(objects, preset='ASW'):
     # run before the shaders exist
     MaltMaterial.track_shader_changes(force_update=True, async_compilation=False)
     return report
+
+
+def copy_collection(collection, suffix):
+    existing = [c for c in bpy.data.collections if c.name.startswith(collection.name + '.' + suffix)]
+    offset = len(existing) + 1
+
+    def copy(source, parent):
+        new = bpy.data.collections.new(f'{source.name}.{suffix}')
+        parent.children.link(new)
+        for obj in source.objects:
+            duplicate = obj.copy()  # object copied, obj.data (mesh / armature) shared
+            duplicate.name = f'{obj.name}.{suffix}'
+            for slot in duplicate.material_slots:
+                material = slot.material
+                if material is not None:
+                    slot.link = 'OBJECT'  # setting the link clears the slot: assign the copy afterwards
+                    slot.material = material.copy()
+                    slot.material.name = f'{material.name.rsplit(".", 1)[0]}.{suffix}'
+            if duplicate.parent is None:
+                duplicate.location.x += float(offset)
+            new.objects.link(duplicate)
+        for child in source.children:
+            copy(child, new)
+        return new
+
+    parent = next((c for c in bpy.data.collections if collection.name in c.children), bpy.context.scene.collection)
+    result = copy(collection, parent)
+    # Re-point copied objects to copied parents and armature modifiers to the copied armature
+    names = {o.name.rsplit('.' + suffix, 1)[0]: o for o in result.all_objects}
+    for obj in result.all_objects:
+        if obj.parent is not None and obj.parent.name in names:
+            obj.parent = names[obj.parent.name]
+        for modifier in obj.modifiers:
+            if modifier.type == 'ARMATURE' and modifier.object is not None and modifier.object.name in names:
+                modifier.object = names[modifier.object.name]
+    return result
+
+
+def write_report(report):
+    text = bpy.data.texts.get('PixelArt Convert Report') or bpy.data.texts.new('PixelArt Convert Report')
+    text.clear()
+    for name, style, textures, warnings, tree in report:
+        text.write(f'{name}: {style}  textures={",".join(textures) or "-"}  tree={tree}\n')
+        for warning in warnings:
+            text.write(f'    warning: {warning}\n')
+    return text.name
+
+
+class MALT_OT_convert_pixel_art(bpy.types.Operator):
+    """Convert the selected objects' materials (or the active collection) to Malt Pixel Cel materials"""
+    bl_idname = 'malt.convert_pixel_art'
+    bl_label = 'Convert to Malt Pixel Art'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    preset: bpy.props.EnumProperty(name='Style', items=[('ASW', 'ASW (GGXrd)', ''), ('KOF XIII', 'KOF XIII', '')])
+    copy_collection: bpy.props.BoolProperty(name='Copy collection', default=False,
+        description='Convert a copy of the active collection, so both styles sit side by side')
+    setup_pixel_lines: bpy.props.BoolProperty(name='Set up Pixel Lines', default=True,
+        description='Use the 1 px Pixel Lines node in the world render layer graph')
+
+    def execute(self, context):
+        from BlenderMalt.MaltPipeline import setup_all_ids
+        objects = [o for o in context.selected_objects if o.type == 'MESH']
+        if self.copy_collection or not objects:
+            collection = context.collection
+            if self.copy_collection:
+                collection = copy_collection(collection, 'KOF' if self.preset == 'KOF XIII' else 'ASW')
+            objects = [o for o in collection.all_objects if o.type == 'MESH']
+        setup_all_ids()
+        report = convert_objects(objects, self.preset)
+        if self.setup_pixel_lines:
+            setup_pixel_lines(context.scene)
+        name = write_report(report)
+        warnings = sum(len(r[3]) for r in report)
+        self.report({'WARNING' if warnings else 'INFO'},
+            f'{len(report)} materials converted, {warnings} warnings (text block "{name}")')
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+
+def setup_pixel_lines(scene):
+    # Implemented in Task 8 (render layer graph edit); a no-op until then
+    return False
+
+
+def _menu(self, context):
+    self.layout.operator(MALT_OT_convert_pixel_art.bl_idname)
+
+
+def register():
+    bpy.utils.register_class(MALT_OT_convert_pixel_art)
+    bpy.types.VIEW3D_MT_object.append(_menu)
+
+
+def unregister():
+    bpy.types.VIEW3D_MT_object.remove(_menu)
+    bpy.utils.unregister_class(MALT_OT_convert_pixel_art)

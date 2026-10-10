@@ -481,3 +481,43 @@ def pixel_cel_convert_dude(scene):
     _solo(scene, dude)
     _frame_objects(scene, dude, 256)
     _convert_all(scene, 'ASW')
+
+
+def pixel_cel_reconvert(scene):
+    # Convert, hand-edit one input, add a node, reconvert: the edit and the node must survive; originals unchanged
+    from BlenderMalt import PixelArtConvert
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    materials = {s.material for o in april for s in o.material_slots if s.material}
+    before = {m.name: PixelArtConvert.original_hash(m) for m in materials}
+    _convert_all(scene, 'ASW')
+    tree = bpy.data.materials['5_body_1_0_0.001'].malt.shader_nodes
+    cel = next(n for n in tree.nodes if getattr(n, 'function_type', '').endswith('pixel_cel'))
+    key = cel.inputs['threshold'].get_source_global_reference().replace('"', '')
+    tree.malt_parameters[key] = 0.3
+    tree.nodes.new('MaltFunctionNode').name = 'HandAdded'
+    _convert_all(scene, 'ASW')
+    assert abs(tree.malt_parameters[key] - 0.3) < 1e-6, 'hand edit lost'
+    assert 'HandAdded' in tree.nodes, 'hand node lost'
+    after = {m.name: PixelArtConvert.original_hash(m) for m in materials}
+    assert before == after, 'original material nodes changed'
+    shared = {m.malt.shader_nodes.name for m in materials if m.name.startswith('5_') and 'eyeshine' not in m.name}
+    assert len(shared) == 1, f'expected one shared tree, got {shared}'
+    print('RECONVERT_OK', flush=True)
+
+
+def pixel_cel_copy_collection(scene):
+    from BlenderMalt import PixelArtConvert
+    ray_traced(scene)
+    source = bpy.data.collections['GGXRD']
+    copy = PixelArtConvert.copy_collection(source, 'KOF')
+    april = _collection_objects('GGXRD')
+    kof = [o for o in copy.all_objects if o.type == 'MESH']
+    PixelArtConvert.convert_objects(april, 'ASW')
+    PixelArtConvert.convert_objects(kof, 'KOF XIII')
+    assert all(o.data is bpy.data.objects[o.name.rsplit('.KOF', 1)[0]].data for o in kof), 'mesh data must be shared'
+    _solo(scene, april + kof)
+    _frame_objects(scene, april + kof, 256)
+    print('COPY_OK', flush=True)
