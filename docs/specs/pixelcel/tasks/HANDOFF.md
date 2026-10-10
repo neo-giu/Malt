@@ -3,7 +3,7 @@
 Rewritten by the orchestrator after every wave. A fresh orchestrator session reads this first.
 
 ## State
-- Wave 2 in progress: T05 finished by the orchestrator (commit 25e0196), T06 running.
+- Wave 2 done: T05 (orchestrator, 25e0196), T06 (5f85af8, $0.35, RECONVERT_OK, COPY_OK, 0 px diff vs T05). Wave 3 (T07) running.
 - T05 reference renders: `build/pixelart/P/t05/<setup>/frame_0001.png`, sheet `build/pixelart/P/t05/sheet.png`
   (April ASW 2 tones + Sss, April KOF 4 tones, Arthur textured).
 
@@ -22,4 +22,4 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
 - none
 
 ## Next
-- Wave 2 rest: `bash tools/cards/run_cards.sh T06`, then wave 3 (T07), wave 4 (T08).
+- Wave 3: `bash tools/cards/run_cards.sh T07`, then wave 4 (T08).
