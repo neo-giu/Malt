@@ -8,7 +8,8 @@ Sub-project 1 of 3 of the sprite pipeline (1 materials, 2 sprite export, 3 shado
 Imported characters become Malt cel-shaded pixel-art materials with one click and no hand work.
 Final use: game sprites (sub-project 2 renders and exports them).
 
-Sources that v1 must handle:
+Sources that v1 must handle (Arthur now has his materials and textures in the file again: re-inspect at
+implementation start):
 
 | Style | Example in `testmalt.blend` | Inputs |
 |---|---|---|
@@ -18,6 +19,13 @@ Sources that v1 must handle:
 
 Tones: 2 (lit, shadow) by default; a ramp input per material adds N bands.
 Tool form: a button in Blender (operator in the fork's BlenderMalt add-on), also callable from scripts.
+
+Two **style presets** (section 3.1): **ASW** (GGXrd: 2 tones, Sss shadow, ilm lines) and **KOF XIII** (painted sprite
+look: 4 tones with hue-shifted shadows, a highlight band, coloured outlines). The converter applies one preset; with
+"Copy collection" on, it first duplicates the collection (objects and materials copied, mesh data shared) and converts
+the copy, so both interpretations of a character sit side by side.
+
+References (local only, not in git): `H:/GameDev/Pixelizer/content/malt/refs/april_ggxrd_1.png`, `april_ggxrd_2.webp`.
 
 ## 2. Components
 
@@ -79,6 +87,27 @@ Per sun light `L` in the light group (several suns: the result with the highest 
 The ASW offset reading (`ilm.G * Col.R - 0.5`: 0 = always shadow, 0.5 = neutral, 1 = nearly always lit) is checked
 on April's textures before it is fixed; the check result goes into the results note.
 
+### 3.1 Style presets
+
+The presets only set Pixel Cel inputs and the ramp; the node is the same.
+
+| Input | ASW | KOF XIII |
+|---|---|---|
+| Use Ramp | off (2 tones) | on, 4 bands, constant interpolation |
+| Ramp (s -> t) | - | s < 0.35: 0 (deep shadow); < 0.5: 0.45 (shadow); < 0.85: 1 (lit); else 1 + highlight |
+| Shadow Tint | Sss texture (ASW) / colour | hue shift: shadow = base rotated 15 degrees toward blue-purple, saturation x1.25, value x0.55 (ASW Sss, when present, is used as the deep shadow) |
+| Highlight | ilm specular | top band: base x1.2 toward warm white, also on generic materials |
+| Inner lines | ilm A | ilm A |
+| Outline colour | near black (0.1) | base x0.35, hue kept (coloured outline), black where it meets the background |
+| Outline width | 1 px x Col.A | 1 px x Col.A, minimum 1 px everywhere |
+
+New Pixel Cel inputs for the KOF XIII preset: `Hue Shift` (degrees), `Shadow Saturation`, `Shadow Value`,
+`Highlight Color`, and on the Line Width path `Outline From Base` (bool) and `Outline Value`. Defaults keep the ASW
+behaviour, so ASW materials are unchanged by these inputs.
+
+The KOF XIII numbers above are starting values, tuned once by eye against KOF XIII sprites; the tuned values become the
+preset defaults and are written into the results note.
+
 Texture sampling: smooth with mipmaps by default (detail below a sprite pixel averages instead of flickering);
 nearest is an input on the Image nodes. Palette reduction is sub-project 2.
 
@@ -115,6 +144,9 @@ Decal meshes: alpha cutout at 0.5 (Opacity Mask in the pre pass, no blending).
   property on the tree; on reconvert it overwrites an input only when its current value still equals the stored one.
   Nodes and links added by hand are kept.
 - Missing image files: the material converts with neutral inputs; the report lists it.
+- Copy collection (option, off by default): duplicates the collection with its child collections, copies objects and
+  materials (suffix `.KOF` or `.ASW`), keeps mesh data and armatures shared, and moves the copy 1 m along +X per
+  existing copy. The original collection is not changed.
 - Report after each run: material -> style -> textures -> warnings, in the Info area and in the text block
   `PixelArt Convert Report`.
 
@@ -145,4 +177,6 @@ Success:
 3. Converting twice gives identical trees and an identical render (0 differing pixels).
 4. Original materials unchanged (hash check).
 5. A ramp added by hand to one material gives N bands and survives a reconvert.
+5a. April converted twice, ASW and KOF XIII (Copy collection), renders side by side; the owner judges the KOF XIII copy
+    against KOF XIII sprites (4 tones, hue-shifted shadows, coloured outlines visible at 256 px).
 6. All unit tests pass. Frame time at most +10 % against the current Suzanne material at the same resolution.
