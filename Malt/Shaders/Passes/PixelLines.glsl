@@ -82,9 +82,10 @@ void main()
 }
 #endif //PIXEL_LINES_DECIDE
 
-#if defined(PIXEL_LINES_THIN) || defined(PIXEL_LINES_PRUNE) || defined(PIXEL_LINES_ZS)
+#if defined(PIXEL_LINES_THIN) || defined(PIXEL_LINES_PRUNE) || defined(PIXEL_LINES_ZS) || defined(PIXEL_LINES_BLOCK)
 uniform sampler2D lines;
 uniform int zs_sub;
+uniform int block_corner;
 
 bool _line(ivec2 q)
 {
@@ -143,6 +144,29 @@ void main()
         }
     }
     #endif
+    #ifdef PIXEL_LINES_BLOCK
+    {
+        // Zhang-Suen keeps 2x2 blocks where 3 or more lines meet. Remove the pixel at corner block_corner of such a block
+        // when it is a simple point (Yokoi 8-connectivity number 1): no line piece splits and no hole opens.
+        ivec2 o = p - ivec2(block_corner & 1, block_corner >> 1);
+        bool block = _line(o) && _line(o + ivec2(1, 0)) && _line(o + ivec2(0, 1)) && _line(o + ivec2(1, 1));
+        ivec2 d[8] = ivec2[8](ivec2(0, 1), ivec2(1, 1), ivec2(1, 0), ivec2(1, -1), ivec2(0, -1), ivec2(-1, -1), ivec2(-1, 0), ivec2(-1, 1));
+        int empty[8];
+        int b = 0;
+        for(int i = 0; i < 8; i++)
+        {
+            empty[i] = _line(p + d[i]) ? 0 : 1;
+            b += 1 - empty[i];
+        }
+        int yokoi = 0;
+        for(int k = 0; k < 8; k += 2)
+            yokoi += empty[k] - empty[k] * empty[(k + 1) % 8] * empty[(k + 2) % 8];
+        if(block && b >= 2 && yokoi == 1)
+        {
+            OUT_RESULT.r = 0.0;
+        }
+    }
+    #endif
     #ifdef PIXEL_LINES_PRUNE
     {
         int n = _n8(p);
@@ -160,7 +184,7 @@ void main()
     }
     #endif
 }
-#endif //PIXEL_LINES_THIN || PIXEL_LINES_PRUNE || PIXEL_LINES_ZS
+#endif //PIXEL_LINES_THIN || PIXEL_LINES_PRUNE || PIXEL_LINES_ZS || PIXEL_LINES_BLOCK
 
 #ifdef PIXEL_LINES_COMPOSITE
 uniform sampler2D color_texture;
@@ -175,6 +199,12 @@ void main()
     vec4 l = texelFetch(lines, p, 0);
     OUT_RESULT = color;
     if(l.r < 0.5) return;
+    #ifdef PIXEL_LINES_DEBUG
+    {
+        OUT_RESULT = l.a > 0.75 ? vec4(1, 0, 1, 1) : vec4(0, 1, 1, 1);
+        return;
+    }
+    #endif
     if(l.a > 0.75)
     {
         ivec2 f = p + ivec2(round(l.gb * 2.0)) - 1;

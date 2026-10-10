@@ -1,3 +1,5 @@
+import os
+
 from Malt.GL.GL import *
 from Malt.GL.Texture import Texture
 from Malt.GL.RenderTarget import RenderTarget
@@ -120,10 +122,18 @@ class PixelLines(PipelineNode):
                 zs.textures['lines'] = self.t_lines[sub]
                 zs.uniforms['zs_sub'].set_value(sub)
                 self.pipeline.draw_screen_pass(zs, self.fbo_lines[1 - sub])
+        # Break the 2x2 blocks left at line junctions, one block corner per pass (lines[0] -> 1 -> 0 -> 1 -> 0)
+        block = _shader(self.pipeline, 'PIXEL_LINES_BLOCK')
+        for corner in range(4):
+            block.textures['lines'] = self.t_lines[corner % 2]
+            block.uniforms['block_corner'].set_value(corner)
+            self.pipeline.draw_screen_pass(block, self.fbo_lines[1 - corner % 2])
         self.thin_and_prune(thin, prune)
 
         # 5. Composite
-        composite = _shader(self.pipeline, 'PIXEL_LINES_COMPOSITE')
+        # PIXEL_LINES_DEBUG=1 (test renders only): outline px magenta, inner line px cyan, for tools/pixelart/line_check.py --marker
+        debug = '\n#define PIXEL_LINES_DEBUG' if os.environ.get('PIXEL_LINES_DEBUG') == '1' else ''
+        composite = _shader(self.pipeline, 'PIXEL_LINES_COMPOSITE' + debug)
         composite.textures['color_texture'] = inputs['Color']
         composite.textures['line_color_texture'] = inputs['Line Color']
         composite.textures['line_data'] = inputs['Pixel Line Data']

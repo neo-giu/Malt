@@ -15,7 +15,7 @@ PRESETS = {
         'highlight_threshold': 2.0,
         'highlight_mix': 0.0,
         'outline_from_base': False,
-        'outline_value': 0.1,
+        'outline_value': 0.01,
     },
     'KOF XIII': {
         'use_ramp': True,
@@ -30,6 +30,6 @@ PRESETS = {
         'highlight_threshold': 0.85,
         'highlight_mix': 0.2,
         'outline_from_base': True,
-        'outline_value': 0.35,
+        'outline_value': 0.1,
     },
 }

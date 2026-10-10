@@ -1,5 +1,7 @@
 """Checks the 1 px line rule on a line mask.  python line_check.py WITH.png WITHOUT.png
-The line mask is the set of pixels that differ between a render with lines and the same render without lines."""
+The line mask is the set of pixels that differ between a render with lines and the same render without lines.
+python line_check.py --marker DEBUG.png: the mask is the magenta / cyan pixels of a PIXEL_LINES_DEBUG=1 render (exact,
+also where a line has the colour of the surface under it)."""
 import sys
 
 import numpy as np
@@ -11,6 +13,13 @@ def line_mask(with_lines, without_lines):
     if a.ndim == 3:
         return np.abs(a[..., :3] - b[..., :3]).max(axis=2) > 0
     return a != b
+
+
+def marker_mask(image):
+    a = np.asarray(image).astype(int)[..., :3]
+    magenta = (a[..., 0] == 255) & (a[..., 1] == 0) & (a[..., 2] == 255)
+    cyan = (a[..., 0] == 0) & (a[..., 1] == 255) & (a[..., 2] == 255)
+    return magenta | cyan
 
 
 def _neighbours(mask):
@@ -56,9 +65,12 @@ def line_violations(mask):
 
 if __name__ == '__main__':
     from PIL import Image
-    with_lines = np.array(Image.open(sys.argv[1]).convert('RGB'))
-    without_lines = np.array(Image.open(sys.argv[2]).convert('RGB'))
-    mask = line_mask(with_lines, without_lines)
+    if sys.argv[1] == '--marker':
+        mask = marker_mask(np.array(Image.open(sys.argv[2]).convert('RGB')))
+    else:
+        with_lines = np.array(Image.open(sys.argv[1]).convert('RGB'))
+        without_lines = np.array(Image.open(sys.argv[2]).convert('RGB'))
+        mask = line_mask(with_lines, without_lines)
     result = line_violations(mask)
     print('line px', int(mask.sum()), result)
     sys.exit(1 if result['total'] > 0 else 0)

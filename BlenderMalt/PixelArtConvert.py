@@ -353,6 +353,10 @@ def convert_objects(objects, preset='ASW'):
     return report
 
 
+# Metres between a collection and its copies (1 m makes April's arms overlap)
+COPY_SPACING = 1.6
+
+
 def copy_collection(collection, suffix):
     existing = [c for c in bpy.data.collections if c.name.startswith(collection.name + '.' + suffix)]
     offset = len(existing) + 1
@@ -370,7 +374,8 @@ def copy_collection(collection, suffix):
                     slot.material = material.copy()
                     slot.material.name = f'{material.name.rsplit(".", 1)[0]}.{suffix}'
             if duplicate.parent is None:
-                duplicate.location.x += float(offset)
+                # delta_location: an action that keys location (April's armature) would undo a location offset
+                duplicate.delta_location.x += offset * COPY_SPACING
             new.objects.link(duplicate)
         for child in source.children:
             copy(child, new)

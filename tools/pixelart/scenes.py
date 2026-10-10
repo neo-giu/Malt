@@ -579,3 +579,28 @@ def pixel_lines_border(scene, enabled=True):
 
 def pixel_lines_border_off(scene):
     pixel_lines_border(scene, False)
+
+
+# --- Both styles (Pixel Cel plan, task 8) ------------------------------------------------------------------------------
+
+def pixel_cel_both_styles(scene, enabled=True):
+    from BlenderMalt import PixelArtConvert
+    ray_traced(scene)
+    copy = PixelArtConvert.copy_collection(bpy.data.collections['GGXRD'], 'KOF')
+    scene.frame_set(scene.frame_current)
+    roots = [o for o in copy.all_objects if o.parent is None]
+    # The copy must stay beside the original after frame_set (an action keys the armature location)
+    print('COPY_OFFSET', sorted({round(o.matrix_world.translation.x - bpy.data.objects[o.name.rsplit('.KOF', 1)[0]]
+                                     .matrix_world.translation.x, 3) for o in roots}), flush=True)
+    april = _collection_objects('GGXRD')
+    kof = [o for o in copy.all_objects if o.type == 'MESH']
+    _setup_malt_ids()
+    PixelArtConvert.convert_objects(april, 'ASW')
+    PixelArtConvert.convert_objects(kof, 'KOF XIII')
+    _use_pixel_lines(scene, enabled)
+    _solo(scene, april + kof)
+    _frame_objects(scene, april + kof, 256)
+
+
+def pixel_cel_both_styles_off(scene):
+    pixel_cel_both_styles(scene, False)

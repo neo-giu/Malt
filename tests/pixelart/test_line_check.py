@@ -44,3 +44,12 @@ def test_line_mask_is_the_pixel_difference():
     b = a.copy()
     b[0, 1] = 255
     assert line_mask(b, a).tolist() == [[False, True], [False, False]]
+
+
+def test_marker_mask_is_magenta_and_cyan_only():
+    from line_check import marker_mask
+    a = np.zeros((1, 4, 3), dtype=np.uint8)
+    a[0, 0] = (255, 0, 255)
+    a[0, 1] = (0, 255, 255)
+    a[0, 2] = (255, 0, 254)
+    assert marker_mask(a).tolist() == [[True, True, False, False]]
