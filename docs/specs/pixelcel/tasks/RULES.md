@@ -20,6 +20,14 @@ Every card obeys these rules. A card may add to them, never relax them.
   `cd /h/GameDev/Malt && RENDER_TIMEOUT=300 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/<name> 1 <setup>`
   Exit 1 = a Python traceback (read `build/pixelart/P/<name>/log.txt`) or a Malt graph error (`stdout.txt`).
   Shader compile errors are in `stdout.txt`: grep it for `ERROR`, `error`, `0(`.
+- **Blender launches are limited (owner rule): at most 3 render.sh launches per card, retries included.** Batch
+  every setup a check step needs into ONE launch with a comma list (they render one after another, the file is
+  reloaded between them, output in `<out>/<setup>/`):
+  `RENDER_TIMEOUT=600 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/<batch> 1 setup_a,setup_b,setup_c`
+  The plan's per-setup render commands are replaced by these batches: use `build/pixelart/P/<batch>/<setup>/frame_0001.png`
+  wherever the plan names `build/pixelart/P/<setup>/frame_0001.png`. Before a re-render, find the cause in log.txt /
+  stdout.txt first; never render to "try something". When the 3 launches are used up, commit what works and report
+  `BLOCKED: launch limit` with the last error.
 - Read data from a .blend without rendering (Malt cannot RENDER in background mode, reading is fine):
   `BLENDER_USER_SCRIPTS=H:/GameDev/MaltDev/scripts "H:/SteamLibrary/steamapps/common/Blender/blender.exe" -b <file> --python <script>`
 - Look at a render: zoom it with `tools/pixelart/side_by_side.py`, then use the Read tool on the PNG.

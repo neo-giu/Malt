@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Usage: render.sh FILE.blend OUT_DIR FRAMES [SETUP]   (GUI launch, quits without saving; refer to render_gui.py)
-# On timeout the whole Blender process tree is killed, so no Malt server process is left behind.
+# Usage: render.sh FILE.blend OUT_DIR FRAMES [SETUP[,SETUP...]]   (GUI launch, quits without saving; refer to render_gui.py)
+# Several setups (comma list) render in ONE Blender launch into OUT_DIR/<setup>/. Blender opens behind other windows
+# (--no-window-focus), small, so it does not take the owner's focus. On timeout only this Blender tree is killed.
 BLENDER="${BLENDER:-H:/SteamLibrary/steamapps/common/Blender/blender.exe}"
 LIMIT="${RENDER_TIMEOUT:-180}"
 OUT="$(mkdir -p "$2" && cd "$2" && pwd -W)"; HERE="$(cd "$(dirname "$0")" && pwd -W)"
-BLENDER_USER_SCRIPTS="${MALT_DEV_SCRIPTS:-H:/GameDev/MaltDev/scripts}" "$BLENDER" "$1" \
+BLENDER_USER_SCRIPTS="${MALT_DEV_SCRIPTS:-H:/GameDev/MaltDev/scripts}" "$BLENDER" --no-window-focus -p 0 0 640 400 "$1" \
   --python "$HERE/render_gui.py" -- "$OUT" "$3" ${4:-} > "$OUT/stdout.txt" 2>&1 &
 PID=$!
 WINPID="$(cat /proc/$PID/winpid 2>/dev/null)"
@@ -13,15 +14,26 @@ for ((i = 0; i < LIMIT; i++)); do
   sleep 1
 done
 if kill -0 $PID 2>/dev/null; then
-  echo "ERROR: timeout after ${LIMIT}s, killing Blender tree (winpid $WINPID)"
+  echo "ERROR: timeout after ${LIMIT}s, killing this Blender tree (winpid $WINPID)"
   [ -n "$WINPID" ] && taskkill //PID "$WINPID" //T //F > /dev/null 2>&1
   kill -9 $PID 2>/dev/null
-  cat "$OUT/log.txt" 2>/dev/null
+  cat "$OUT"/log.txt "$OUT"/*/log.txt 2>/dev/null
   exit 1
 fi
 wait $PID
-cat "$OUT/log.txt"
-grep -q "^MALT_FILE .*GameDev.Malt" "$OUT/log.txt" || { echo "ERROR: not rendered with the fork"; exit 1; }
-grep -q "Traceback" "$OUT/log.txt" && exit 1
-grep -q "MaltGraphExecutionException" "$OUT/stdout.txt" && { echo "ERROR: Malt errors in stdout.txt"; exit 1; }
-exit 0
+STATUS=0
+if [[ "${4:-}" == *,* ]]; then
+  LOGS=()
+  IFS=',' read -ra SETUPS <<< "$4"
+  for S in "${SETUPS[@]}"; do LOGS+=("$OUT/$S/log.txt"); done
+else
+  LOGS=("$OUT/log.txt")
+fi
+for LOG in "${LOGS[@]}"; do
+  echo "== $LOG"
+  cat "$LOG" 2>/dev/null || { echo "ERROR: no log (setup not reached)"; STATUS=1; continue; }
+  grep -q "^MALT_FILE .*GameDev.Malt" "$LOG" || { echo "ERROR: not rendered with the fork"; STATUS=1; }
+  grep -q "Traceback" "$LOG" && STATUS=1
+done
+grep -q "MaltGraphExecutionException" "$OUT/stdout.txt" && { echo "ERROR: Malt errors in stdout.txt"; STATUS=1; }
+exit $STATUS

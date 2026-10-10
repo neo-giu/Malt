@@ -9,7 +9,7 @@ Implement plan Task 7 exactly: `docs/pixelart/06-pixel-cel-plan.md`, section "##
 the files, interfaces, test code, implementation code and commands. Follow its steps in order: test or check first,
 see it fail (quote the failing line), implement, see it pass, commit once.
 
-Size L: commit what works first (lattice pass + decide + composite, with the line_check numbers) and list the rest in the Report. Never add a filter on colours to pass line_check: fix the line decision at its cause.
+Batch: ONE launch with setups `pixel_lines_on,pixel_lines_off,pixel_lines_border,pixel_lines_border_off,pixel_cel_debug` into build/pixelart/P/t07/. Size L: commit what works first (lattice pass + decide + composite, with the line_check numbers) and list the rest in the Report. Never add a filter on colours to pass line_check: fix the line decision at its cause.
 
 ## Read first (and only)
 - docs/specs/pixelcel/tasks/RULES.md (whole)

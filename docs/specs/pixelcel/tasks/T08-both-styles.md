@@ -9,7 +9,7 @@ Implement plan Task 8 exactly: `docs/pixelart/06-pixel-cel-plan.md`, section "##
 the files, interfaces, test code, implementation code and commands. Follow its steps in order: test or check first,
 see it fail (quote the failing line), implement, see it pass, commit once.
 
-Do not copy files into H:/GameDev/Pixelizer (the orchestrator does that): skip the plan's copy step and say so. Do not push.
+Batch: ONE launch per tuning round with setups `pixel_cel_both_styles,pixel_cel_both_styles_off,lines_w1` (lines_w1 gives the Suzanne frame time for criterion 6) into build/pixelart/P/t08_<round>/; at most 3 rounds. Do not copy files into H:/GameDev/Pixelizer (the orchestrator does that): skip the plan's copy step and say so. Do not push.
 
 ## Read first (and only)
 - docs/specs/pixelcel/tasks/RULES.md (whole)
@@ -30,7 +30,7 @@ Do not copy files into H:/GameDev/Pixelizer (the orchestrator does that): skip t
   and stop.
 
 ## Done when
-- [ ] render pixel_cel_both_styles -> EXIT 0, sheet docs/pixelart/img/pixel_cel_both.png exists
+- [ ] the last batch launch -> EXIT 0, sheet docs/pixelart/img/pixel_cel_both.png exists
 - [ ] line_check on both vs both_off -> 'total': 0
 - [ ] docs/pixelart/07-pixel-cel-results.md covers every spec success criterion with a measured result
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`

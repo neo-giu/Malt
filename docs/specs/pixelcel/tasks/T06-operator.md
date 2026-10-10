@@ -9,6 +9,7 @@ Implement plan Task 6 exactly: `docs/pixelart/06-pixel-cel-plan.md`, section "##
 the files, interfaces, test code, implementation code and commands. Follow its steps in order: test or check first,
 see it fail (quote the failing line), implement, see it pass, commit once.
 
+The failing run of Step 1 counts as one of the 3 launches: batch it with the same 3 setups.
 
 ## Read first (and only)
 - docs/specs/pixelcel/tasks/RULES.md (whole)
@@ -29,9 +30,8 @@ see it fail (quote the failing line), implement, see it pass, commit once.
   and stop.
 
 ## Done when
-- [ ] render pixel_cel_reconvert -> EXIT 0 and RECONVERT_OK
-- [ ] render pixel_cel_copy_collection -> EXIT 0 and COPY_OK
-- [ ] two pixel_cel_convert_asw renders -> differing px 0
+- [ ] ONE launch with setups `pixel_cel_reconvert,pixel_cel_copy_collection,pixel_cel_convert_asw` into build/pixelart/P/t06/ -> EXIT 0, RECONVERT_OK and COPY_OK in their stdout/log
+- [ ] build/pixelart/P/t06/pixel_cel_convert_asw/frame_0001.png vs the T05 render build/pixelart/P/t05/pixel_cel_convert_asw/frame_0001.png -> differing px 0
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`
 
 ## Report (last message, max 15 lines)

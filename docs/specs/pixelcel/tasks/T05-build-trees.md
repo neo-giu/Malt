@@ -9,7 +9,7 @@ Implement plan Task 5 exactly: `docs/pixelart/06-pixel-cel-plan.md`, section "##
 the files, interfaces, test code, implementation code and commands. Follow its steps in order: test or check first,
 see it fail (quote the failing line), implement, see it pass, commit once.
 
-Step 2 (probe) is required: write the printed Malt node API facts (IO node names, socket names, function keys, custom output storage) into docs/specs/pixelcel/mechanics/build-trees.md, because T06 and T07 depend on them.
+Batch: run the probe and the 4 converts in ONE launch: setups `_probe_tree_api,pixel_cel_convert_asw,pixel_cel_convert_kof,pixel_cel_convert_arthur,pixel_cel_convert_dude` into build/pixelart/P/t05/. The failing run of Step 1 is that same batch before PixelArtConvert.py exists. Step 2 (probe) is required: write the printed Malt node API facts (IO node names, socket names, function keys, custom output storage) into docs/specs/pixelcel/mechanics/build-trees.md, because T06 and T07 depend on them.
 
 ## Read first (and only)
 - docs/specs/pixelcel/tasks/RULES.md (whole)
@@ -30,7 +30,7 @@ Step 2 (probe) is required: write the printed Malt node API facts (IO node names
   and stop.
 
 ## Done when
-- [ ] renders pixel_cel_convert_asw / _kof / _arthur / _dude -> all EXIT 0, PIXEL_CEL_REPORT lines with the expected styles
+- [ ] the batch launch -> EXIT 0, PIXEL_CEL_REPORT lines (in build/pixelart/P/t05/stdout.txt) with the expected styles
 - [ ] sheet build/pixelart/P/sheet_convert.png, read by you: April shows base colours, 2 tones (ASW) and 4 tones (KOF), no yellow default material
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`
 

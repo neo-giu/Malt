@@ -14,7 +14,10 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
   debug material, compare_cel.py.
 
 ## Carried issues
-- none
+- Wave 2 first try (T05) stopped by the orchestrator at the owner's request: too many Blender windows taking focus.
+  Partial T05 work saved in build/cards/partial_T05/ (not in git), tree reverted.
+- Fixed: render.sh opens Blender with --no-window-focus at 640x400 and takes a comma list of setups (one launch,
+  file reloaded between setups; verified: 3 setups = same numbers as 3 launches). RULES: max 3 launches per card.
 
 ## Open questions for the owner
 - none
