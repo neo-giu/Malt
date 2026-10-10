@@ -99,7 +99,7 @@ The presets only set Pixel Cel inputs and the ramp; the node is the same.
 | Highlight | ilm specular | top band: base x1.2 toward warm white, also on generic materials |
 | Inner lines | ilm A | ilm A |
 | Outline colour | near black (0.1) | base x0.35, hue kept (coloured outline), black where it meets the background |
-| Outline width | 1 px x Col.A | 1 px x Col.A, minimum 1 px everywhere |
+| Outline width | exactly 1 px (section 3.2) | exactly 1 px (section 3.2) |
 
 New Pixel Cel inputs for the KOF XIII preset: `Hue Shift` (degrees), `Shadow Saturation`, `Shadow Value`,
 `Highlight Color`, and on the Line Width path `Outline From Base` (bool) and `Outline Value`. Defaults keep the ASW
@@ -111,7 +111,21 @@ preset defaults and are written into the results note.
 Texture sampling: smooth with mipmaps by default (detail below a sprite pixel averages instead of flickering);
 nearest is an input on the Image nodes. Palette reduction is sub-project 2.
 
-Outline: Malt `Line Width` node, width = `Line Width` input (default 1 px) times `Col.A` for ASW.
+### 3.2 Lines: always exactly 1 px
+
+Hard rule, every preset, every material, every line (outline and inner lines): a line is exactly 1 px thick, with no
+variation of thickness anywhere, for any reason (no vertex-alpha scaling, no distance scaling, no 2 px corners, no
+doubled pixels where lines meet, no gaps).
+
+- Inner lines: the ilm A mask decides only WHICH pixels are line pixels; the shading never widens them.
+- Outline: `Col.A` (ASW) only switches the outline on or off (`Col.A < 0.5` = no outline there); it never changes the
+  width. There is no width input.
+- Check: every line pixel set is 1 px wide (no 2x2 block of line pixels, no line pixel with line neighbours on two
+  opposite sides across the line), checked per pixel in the render tests, in still frames and in animation frames.
+- Method: Malt's Line Width node is used only if a render test shows it meets this rule at width 1. If it does not,
+  Pixel Cel gets its own 1 px line decision (the silhouette rule from Pixelizer `contour_lines`: half-pixel lattice
+  coverage, diamond rule, 8-connected), decided per pixel in the main pass (not a post filter). The plan's first task
+  measures which case applies.
 Decal meshes: alpha cutout at 0.5 (Opacity Mask in the pre pass, no blending).
 
 ## 4. Converter
@@ -179,4 +193,5 @@ Success:
 5. A ramp added by hand to one material gives N bands and survives a reconvert.
 5a. April converted twice, ASW and KOF XIII (Copy collection), renders side by side; the owner judges the KOF XIII copy
     against KOF XIII sprites (4 tones, hue-shifted shadows, coloured outlines visible at 256 px).
+5b. Lines: 0 pixels that break the 1 px rule (section 3.2) in every render test, still and animated, both presets.
 6. All unit tests pass. Frame time at most +10 % against the current Suzanne material at the same resolution.
