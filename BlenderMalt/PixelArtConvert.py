@@ -151,6 +151,7 @@ def build_tree(plan, preset, name):
     main = _io_node(tree, 'MAIN_PASS_PIXEL_SHADER')
     tree.links.new(cel.outputs['color'], main.inputs['Color'])
     tree.links.new(cel.outputs['line_color'], main.inputs['Line Color'])
+    link_line_data(tree)
 
     written = {}
     values = dict(PRESETS[preset])
@@ -195,6 +196,48 @@ def build_tree(plan, preset, name):
     # Malt only updates trees shown in an editor: write the generated shader of a script-built tree ourselves
     tree.update_ext(force_track_shader_changes=False, force_update=True)
     return tree
+
+
+LINE_DATA = 'Pixel Line Data'
+
+
+def _main_pass_custom_io(world):
+    for graph_type in world.malt_graph_types:
+        custom_pass = graph_type.custom_passes.get('Default')
+        if custom_pass is not None and 'MAIN_PASS_PIXEL_SHADER' in custom_pass.io:
+            return graph_type.name, custom_pass.io['MAIN_PASS_PIXEL_SHADER']
+    raise KeyError('no Mesh main pass custom IO in the world')
+
+
+def ensure_line_data_output(world=None):
+    # The main pass gets a custom vec4 output 'Pixel Line Data' (pixel_cel line_data), read by the PixelLines node
+    world = world or bpy.context.scene.world
+    graph_name, io = _main_pass_custom_io(world)
+    if LINE_DATA in io.outputs:
+        return False
+    item = io.outputs.add()
+    item.name = LINE_DATA
+    item.graph_type = graph_name
+    item.io_type = 'MAIN_PASS_PIXEL_SHADER'
+    item.is_output = True
+    item.parameter = 'vec4'
+    for tree in bpy.data.node_groups:
+        if tree.bl_idname != 'MaltTree':
+            continue
+        for node in tree.nodes:
+            if (node.bl_idname == 'MaltIONode' and node.is_output and node.io_type == 'MAIN_PASS_PIXEL_SHADER'
+                    or getattr(node, 'function_type', '') == 'MainPass'):
+                node.setup()
+        if tree.graph_type == 'Mesh':
+            tree.update_ext(force_track_shader_changes=False, force_update=True)
+    return True
+
+
+def link_line_data(tree):
+    ensure_line_data_output()
+    main = _io_node(tree, 'MAIN_PASS_PIXEL_SHADER')
+    cel = next(n for n in tree.nodes if getattr(n, 'function_type', '') == find_function(tree, 'pixel_cel'))
+    tree.links.new(cel.outputs['line_data'], main.inputs[LINE_DATA])
 
 
 def original_hash(material):
@@ -390,9 +433,40 @@ class MALT_OT_convert_pixel_art(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
 
-def setup_pixel_lines(scene):
-    # Implemented in Task 8 (render layer graph edit); a no-op until then
-    return False
+def _function_node(tree, function_type):
+    for node in tree.nodes:
+        if getattr(node, 'function_type', '') == function_type:
+            return node
+    return None
+
+
+def setup_pixel_lines(scene, enabled=True):
+    # In memory: in every Render Layer graph, route the main pass through PixelLines instead of LineRender
+    ensure_line_data_output(scene.world)
+    done = False
+    for tree in bpy.data.node_groups:
+        if tree.bl_idname != 'MaltTree' or tree.graph_type != 'Render Layer':
+            continue
+        line, main, pre = (_function_node(tree, t) for t in ('LineRender', 'MainPass', 'PrePass'))
+        if not (line and main and pre):
+            continue
+        pixel = _function_node(tree, 'PixelLines')
+        if pixel is None:
+            pixel = tree.nodes.new('MaltFunctionNode')
+            pixel.function_type = find_function(tree, 'PixelLines')
+            pixel.location = (line.location[0], line.location[1] - 300)
+        main.setup()
+        targets = [l.to_socket for l in tree.links if l.from_node in (line, pixel) and l.from_socket.name == 'Color']
+        for source, name in ((main, 'Color'), (main, 'Line Color'), (main, LINE_DATA)):
+            tree.links.new(source.outputs[name], pixel.inputs[name])
+        tree.links.new(pre.outputs['Scene'], pixel.inputs['Scene'])
+        for link in [l for l in tree.links if l.from_node in (line, pixel) and l.from_socket.name == 'Color']:
+            tree.links.remove(link)
+        for target in targets:
+            tree.links.new((pixel if enabled else line).outputs['Color'], target)
+        tree.update_ext(force_update=True)
+        done = True
+    return done
 
 
 def _menu(self, context):

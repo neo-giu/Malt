@@ -178,10 +178,6 @@ void pixel_cel(
     vec3 rgb = tone == PIXEL_CEL_TONE_HIGHLIGHT
         ? mix(base.rgb * spec_boost, highlight_color, highlight_mix)
         : mix(shadow_color, base.rgb, best_t);
-    if(use_ilm_texture && ilm.a <= 0.5)
-    {
-        rgb *= ilm.a;
-    }
     color = vec4(rgb, base.a);
 }
 

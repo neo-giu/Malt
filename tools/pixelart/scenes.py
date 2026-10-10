@@ -521,3 +521,61 @@ def pixel_cel_copy_collection(scene):
     _solo(scene, april + kof)
     _frame_objects(scene, april + kof, 256)
     print('COPY_OK', flush=True)
+
+
+# --- Pixel Lines (Pixel Cel plan, task 7) ------------------------------------------------------------------------------
+
+def _use_pixel_lines(scene, enabled):
+    # In memory: in every Render Layer graph, route the main pass through PixelLines instead of LineRender.
+    # Off also sets the converted trees' Line Width to 0, so the 'off' render has no lines at all (the line mask is on - off).
+    from BlenderMalt import PixelArtConvert
+    assert PixelArtConvert.setup_pixel_lines(scene, enabled), 'no Render Layer graph with LineRender/MainPass/PrePass'
+    if enabled:
+        return
+    count = 0
+    for tree in bpy.data.node_groups:
+        if tree.bl_idname != 'MaltTree' or 'pixel_cel_set' not in tree.keys():
+            continue
+        main = next(n for n in tree.nodes if n.bl_idname == 'MaltIONode' and n.is_output
+                    and n.io_type == 'MAIN_PASS_PIXEL_SHADER')
+        key = main.inputs['Line Width'].get_source_global_reference().replace('"', '')
+        tree.malt_parameters[key] = 0.0
+        count += 1
+        for material in bpy.data.materials:
+            if material.malt.shader_nodes is tree and key in material.malt_parameters.keys():
+                material.malt_parameters[key] = 0.0
+    print('LINE_WIDTH_ZEROED trees', count, flush=True)
+
+
+def pixel_lines_on(scene):
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _convert_all(scene, 'ASW')
+    _use_pixel_lines(scene, True)
+
+
+def pixel_lines_off(scene):
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _convert_all(scene, 'ASW')
+    _use_pixel_lines(scene, False)
+
+
+def pixel_lines_border(scene, enabled=True):
+    # Review focus 5: the character cut by the frame border and two characters overlapping
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    arthur = _collection_objects('arthurmodel')
+    _solo(scene, april + arthur)
+    camera = _frame_objects(scene, april, 256)
+    camera.data.ortho_scale *= 0.6  # cut at the border
+    _convert_all(scene, 'ASW')
+    _use_pixel_lines(scene, enabled)
+
+
+def pixel_lines_border_off(scene):
+    pixel_lines_border(scene, False)

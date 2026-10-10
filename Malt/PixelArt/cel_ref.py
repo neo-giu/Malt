@@ -35,6 +35,7 @@ def cel_color(base_rgb, shadow_rgb, tone, t, spec_boost=1.3, highlight_rgb=(1.0,
         color = tuple(b * spec_boost * (1.0 - highlight_mix) + h * highlight_mix for b, h in zip(base_rgb, highlight_rgb))
     else:
         color = tuple(s + (b - s) * t for b, s in zip(base_rgb, shadow_rgb))
+    # line_mask: the material-only path (Pixel Lines off). With Pixel Lines the shader no longer darkens inner lines
     line = 1.0 if line_mask > 0.5 else line_mask
     return tuple(c * line for c in color)
 
