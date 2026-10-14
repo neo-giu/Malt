@@ -33,7 +33,15 @@ CARDS = [
       "line_check --marker (no rules) on pixel_rules_off -> 'total': 0",
       'kept counts per rule (A, B, C) and per 100 line px quoted next to the sprite ranges; compare_cel 0 mismatches',
       'face + hands zoom, rules on vs off, read by you'],
-     'Sprite numbers: docs/pixelart/11-sprite-lines-report.txt (read the summary lines only).'),
+     'Sprite numbers: docs/pixelart/11-sprite-lines-report.txt (read the summary lines only). '
+     'Orchestrator facts (commit a4d8c9c, after the plan was written): the silhouette outline is now OUTSIDE the model '
+     '(ring kinds SILHOUETTE / KEEP are uncovered background pixels; every other kind is a covered pixel); gb stores '
+     'the fill offset -2..2 as (offset + 2) / 4 (decode: p + ivec2(round(gb * 4.0)) - 2), so the plan text '
+     '"q + offset(gb)" means that decode; _surface(q) counts every covered kind, line or not. line_check already '
+     'exempts needed L corners (beside a surface pixel). Marker results before this card (build/pixelart/P/out_marker3, '
+     'out_marker4): outside 0, l_corners 0; 2x2 blocks where overlap lines meet the outline: both styles 16, April 8, '
+     'border 2. Rule A must classify these: keep junctions (3+ runs on the ring), and every other block must be broken '
+     'without exposing the model; quote the before/after block counts.'),
     ('T02', 'zones', 'zones.py: zones, ramps and the palette (pure Python)', 2, 1, 'T01b', 'M',
      'Malt/PixelArt/zones.py, tests/pixelart/test_zones.py, Malt/PixelArt/presets.py, '
      'BlenderMalt/PixelArtConvert.py (the preset loop skip line only), tests/pixelart/test_pixel_cel_ref.py',

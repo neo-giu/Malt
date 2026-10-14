@@ -3,7 +3,7 @@
 Rewritten by the orchestrator after every wave. A fresh orchestrator session reads this first.
 
 ## State
-- T01 KEEP done (worker blocked on 2 needed border L corners; orchestrator fixed line_check). Next: T01b, T02. Check the hands compare build/pixelart/P/keep/hands_compare.png: KEEP adds only ~38 px, verify fingers are really back.
+- T01 KEEP done (2109b8c). Owner review 2: outline moved OUTSIDE the model (a4d8c9c, orchestrator): fingers keep their skin, outside 0, L corners 0; 26 overlap/outline 2x2 spots left for rule A (T01b).
 - Previous batch: pixelcel (done, refer to docs/specs/pixelcel/tasks/HANDOFF.md). Outline ring fix d5f29d4.
 
 ## Waves
