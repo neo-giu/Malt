@@ -96,3 +96,15 @@ KOF XIII copy drew outlines on lit areas.
 - line_check --marker: pixel_keep, pixel_keep_off, both_styles total 0, outside 0. pixel_lines_border (was 1907 px, total 0)
   now 1919 px, total 2: two l_corners, both KEEP pixels at the frame border (4,0) and (4,239). Open.
 - compare_cel on pixel_cel_debug: 0 mismatches (35280 px).
+
+## Outline outside the model (owner review 2, 2026-10-14)
+Owner: with the outline on the model's edge pixels (d5f29d4), 2 px fingers became a 1 px line (no skin) and needed
+L corners showed everywhere. Now the silhouette outline is drawn OUTSIDE the model: a background pixel beside a covered
+pixel (4-neighbour) is outline, coloured from that neighbour. The fill is never turned into line.
+- A removed outline pixel becomes background, only when no covered pixel (line or not) is beside it.
+- Pinholes (an uncovered pixel with 4 covered neighbours) are filled. KEEP fills only slivers that would vanish (no
+  pixel centre of the 3x3 shows that object); on April the fingers show without it (KEEP adds 0 px there now).
+- The Col.A switch applies only where a material wrote line_data (w > 0). gb now stores the fill offset -2..2 as /4.
+- Marker checks (`build/pixelart/P/out_marker3`, `out_marker4`): outside 0 and l_corners 0 in all scenes; 2x2
+  blocks left where overlap lines meet the outline: both styles 16, April 8, border 2 (corner rule A, card T01b).
+  compare_cel 0 mismatches.
