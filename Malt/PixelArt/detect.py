@@ -17,11 +17,24 @@ class ConvertPlan:
     uv_map: str = None
     use_vertex_color: bool = False
     warnings: list = dataclasses.field(default_factory=list)
+    keep: bool = False
 
     @property
     def key(self):
         textures = ','.join(f'{k}={os.path.normcase(v)}' for k, v in sorted(self.textures.items()))
         return f'{self.style}|{textures}|{tuple(round(c, 4) for c in self.base_color)}'
+
+
+_KEEP = re.compile(r'(^|[^a-z])(hands?|fingers?|gloves?|straps?)([^a-z]|$)', re.IGNORECASE)
+
+
+_CAMEL = re.compile(r'(?<=[a-z])(?=[A-Z])')
+
+
+def keep_by_name(material_name, object_names):
+    # KEEP parts (Pixelizer keep.py): thin parts that must never vanish between pixel centres
+    # '_' and camelCase humps split words: '5_hands_1', 'L_Finger_02' and 'BagStrap' match, 'Handle' does not
+    return any(_KEEP.search(_CAMEL.sub(' ', n.replace('_', ' '))) for n in [material_name, *object_names])
 
 
 def _norm(path):

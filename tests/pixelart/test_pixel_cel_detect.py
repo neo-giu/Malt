@@ -101,3 +101,15 @@ def test_shared_key():
     a = detect(_material('5_body', [_image('APRL_baseX.png', APRIL_DIR + '/APRL_baseX.png')]), listdir, exists)
     b = detect(_material('5_hat', [_image('APRL_baseX.png', APRIL_DIR + '/APRL_baseX.png')]), listdir, exists)
     assert a.key == b.key
+
+
+from Malt.PixelArt.detect import keep_by_name
+
+
+def test_keep_by_name_hands_fingers_straps():
+    assert keep_by_name('5_hands_1_0_0.001', ['5_hands_1_0_0.001'])
+    assert keep_by_name('Body', ['L_Finger_02'])
+    assert keep_by_name('BagStrap', [])
+    assert keep_by_name('Glove_mat', [])
+    assert not keep_by_name('5_body_1_0_0.001', ['5_body_1_0_0.001'])
+    assert not keep_by_name('Shoulder', ['Handle'])   # 'hand' only as a whole word part, not in 'Handle'

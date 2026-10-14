@@ -7,7 +7,7 @@ import os
 
 import bpy
 
-from Malt.PixelArt.detect import detect
+from Malt.PixelArt.detect import detect, keep_by_name
 from Malt.PixelArt.presets import PRESETS
 
 _BSDF_TYPES = {'BSDF_PRINCIPLED', 'BSDF_DIFFUSE'}
@@ -190,9 +190,17 @@ def build_tree(plan, preset, name):
         if image is not None:
             _set(tree, opacity, 'texture_', image, written)
         _set(tree, opacity, 'use_cutout', True, written)
+    if plan.keep:
+        pre = _pre_pass_node(tree)
+        keep = tree.nodes.new('MaltFunctionNode')
+        keep.function_type = find_function(tree, 'pixel_cel_keep_id')
+        keep.location = (-400, 600)
+        _set(tree, keep, 'keep', True, written)
+        tree.links.new(keep.outputs['result'], next(s for s in pre.inputs if s.name.lower().endswith('id')))
     tree['pixel_cel_set'] = json.dumps(written)
     tree['pixel_cel_preset'] = preset
     tree['pixel_cel_style'] = plan.style
+    tree['pixel_cel_keep'] = plan.keep
     # Malt only updates trees shown in an editor: write the generated shader of a script-built tree ourselves
     tree.update_ext(force_track_shader_changes=False, force_update=True)
     return tree
@@ -317,17 +325,19 @@ def update_tree(tree, plan, preset):
     return kept
 
 
-def convert_material(material, preset='ASW', trees=None):
+def convert_material(material, preset='ASW', trees=None, object_names=()):
     plan = detect(describe_material(material))
+    plan.keep = keep_by_name(material.name, list(object_names))
     trees = {} if trees is None else trees
-    key = plan.key + '|' + preset
+    key = plan.key + '|' + preset + ('|keep' if plan.keep else '')
     if key not in trees:
         existing = material.malt.shader_nodes
-        if existing is not None and existing.get('pixel_cel_preset') == preset and existing.get('pixel_cel_key') == plan.key:
+        if (existing is not None and existing.get('pixel_cel_preset') == preset and existing.get('pixel_cel_key') == plan.key
+                and bool(existing.get('pixel_cel_keep', False)) == plan.keep):
             update_tree(existing, plan, preset)
             trees[key] = existing
         else:
-            trees[key] = build_tree(plan, preset, f'PixelCel {preset} {material.name}')
+            trees[key] = build_tree(plan, preset, f'PixelCel {preset} {material.name}' + (' KEEP' if plan.keep else ''))
             trees[key]['pixel_cel_key'] = plan.key
     material.malt.material_type = 'Mesh'
     material.malt.shader_nodes = trees[key]
@@ -338,14 +348,20 @@ def convert_objects(objects, preset='ASW'):
     trees = {}
     report = []
     done = set()
+    users = {}
+    for obj in objects:
+        for slot in obj.material_slots:
+            if slot.material is not None:
+                users.setdefault(slot.material.name, []).append(obj.name)
     for obj in objects:
         for slot in obj.material_slots:
             material = slot.material
             if material is None or material.name in done:
                 continue
             done.add(material.name)
-            plan, tree = convert_material(material, preset, trees)
-            report.append((material.name, plan.style, sorted(plan.textures), plan.warnings, tree.name))
+            plan, tree = convert_material(material, preset, trees, users[material.name])
+            report.append((material.name, plan.style, sorted(plan.textures),
+                           plan.warnings + (['keep'] if plan.keep else []), tree.name))
         # Malt uploads a vertex colour only when the mesh names it (Malt Vertex Colors); without it COLOR[0] is 0,
         # the ASW offset becomes -0.5 and nothing is lit. pixel_cel reads vertex_color_index 0.
         if obj.type == 'MESH' and 'Col' in obj.data.color_attributes and not obj.data.malt_vertex_color_override_0:

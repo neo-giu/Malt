@@ -88,3 +88,11 @@ KOF XIII copy drew outlines on lit areas.
 - Before: outside 70 (both styles), 45 (April). After (`build/pixelart/P/ring_marker2/`): both styles 3012 line px,
   April 1541, border 1907, all with total 0 and outside 0. compare_cel 0 mismatches. Face SDF l120 0.29 % (unchanged).
 - Also fixed: `Col` was not named for Malt, so COLOR[0] was 0 and the ASW offset -0.5 put every pixel in shadow.
+
+## KEEP (plan Task 1, 2026-10-14) - NOT committed, one check open
+- Parts named hand/finger/glove/strap get the KEEP bit (`pixel_cel_keep_id`, ID.w bit 0). Pixel Lines shows an uncovered
+  pixel when a KEEP part touches any of its 9 lattice samples; marker colour yellow, exempt from isolated/short.
+- April (`build/pixelart/P/keep_marker/`): KEEP px in the hands box 240 (off: 0). Opaque px in the box 3270 on, 3232 off.
+- line_check --marker: pixel_keep, pixel_keep_off, both_styles total 0, outside 0. pixel_lines_border (was 1907 px, total 0)
+  now 1919 px, total 2: two l_corners, both KEEP pixels at the frame border (4,0) and (4,239). Open.
+- compare_cel on pixel_cel_debug: 0 mismatches (35280 px).

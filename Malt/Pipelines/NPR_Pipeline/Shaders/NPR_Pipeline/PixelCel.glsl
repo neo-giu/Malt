@@ -199,4 +199,21 @@ float pixel_cel_opacity(sampler2D texture_, int uv_index, bool use_cutout, float
     return texture(texture_, UV[uv_index]).a >= cutout ? 1.0 : 0.0;
 }
 
+#define PIXEL_CEL_KEEP_BIT 1u
+
+/*  META
+    @meta: label=Pixel Cel Keep ID;
+    @keep: default=false;
+*/
+// Pre pass ID with the KEEP bit (Pixel Lines: this part never vanishes between pixel centres)
+uvec4 pixel_cel_keep_id(bool keep)
+{
+    uvec4 id = ID;
+    if(keep)
+    {
+        id.w |= PIXEL_CEL_KEEP_BIT;
+    }
+    return id;
+}
+
 #endif //PIXEL_CEL_GLSL

@@ -663,3 +663,41 @@ for _key, (_h, _e) in _FACE_SDF_LIGHTS.items():
         scene, h, e, 'face_sdf_cel.mesh.glsl'))(_h, _e)
     globals()['face_plain_' + _key] = (lambda h, e: lambda scene: _face_sdf_scene(
         scene, h, e, 'face_sdf_plain.mesh.glsl'))(_h, _e)
+
+
+# --- KEEP parts (Pixel Cel plan, task 1) -------------------------------------------------------------------------------
+
+def _hands_box(scene, objects):
+    # pixel box of the given objects in the current camera (x0, y0, x1, y1), PNG rows (y down)
+    import mathutils
+    from bpy_extras.object_utils import world_to_camera_view
+    w, h = scene.render.resolution_x, scene.render.resolution_y
+    xs, ys = [], []
+    for obj in objects:
+        for corner in obj.bound_box:
+            co = world_to_camera_view(scene, scene.camera, obj.matrix_world @ mathutils.Vector(corner))
+            xs.append(co.x * w)
+            ys.append((1.0 - co.y) * h)
+    print('HANDS_BOX', int(min(xs)), int(min(ys)), int(max(xs)) + 1, int(max(ys)) + 1, flush=True)
+
+
+def pixel_keep(scene, keep=True):
+    from BlenderMalt import PixelArtConvert
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _setup_malt_ids()
+    PixelArtConvert.convert_objects(april, 'ASW')
+    if not keep:
+        for tree in bpy.data.node_groups:
+            for node in getattr(tree, 'nodes', []):
+                if node.bl_idname == 'MaltFunctionNode' and 'keep_id' in str(node.function_type):
+                    tree.links.remove(node.outputs['result'].links[0])
+                    tree.update_ext(force_track_shader_changes=False, force_update=True)
+    _use_pixel_lines(scene, True)
+    _hands_box(scene, [o for o in april if 'hand' in o.name.lower()])
+
+
+def pixel_keep_off(scene):
+    pixel_keep(scene, False)

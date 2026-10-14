@@ -61,3 +61,26 @@ def test_outside_pixels_are_model_pixels_beside_the_background():
     image[0, 1:, 3] = 255                      # covered: x 1, 2, 3
     lines = np.array([[False, False, True, False]])
     assert outside_pixels(image, lines).tolist() == [[False, True, False, False]]
+
+
+def test_keep_pixels_are_lines_and_exempt_from_short_and_isolated():
+    from line_check import marker_mask, keep_mask
+    a = np.zeros((3, 5, 3), dtype=np.uint8)
+    a[1, 1] = (255, 255, 0)               # a lone KEEP pixel
+    a[1, 3] = (255, 0, 255)               # a lone outline pixel
+    mask, keep = marker_mask(a), keep_mask(a)
+    assert mask[1, 1] and mask[1, 3] and keep[1, 1] and not keep[1, 3]
+    v = line_violations(mask, exempt=keep)
+    assert v['isolated'] == 1 and v['short'] == 1   # only the outline pixel counts
+
+
+def test_l_corner_beside_surface_is_a_needed_corner():
+    # the corner pixel keeps the surface pixel below it away from the background (removing it would expose the model)
+    mask = _mask(['#....',
+                  '##...',
+                  '.....'])
+    surface = _mask(['.....',
+                     '.....',
+                     '#....'])
+    assert line_violations(mask)['l_corners'] == 1
+    assert line_violations(mask, surface=surface)['l_corners'] == 0
