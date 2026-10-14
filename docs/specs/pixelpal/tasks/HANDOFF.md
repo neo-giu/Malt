@@ -3,7 +3,7 @@
 Rewritten by the orchestrator after every wave. A fresh orchestrator session reads this first.
 
 ## State
-- Spec 09 approved by the owner (2026-10-14). Plan 10 written, waiting for owner review. No card run yet.
+- T01 KEEP done (worker blocked on 2 needed border L corners; orchestrator fixed line_check). Next: T01b, T02. Check the hands compare build/pixelart/P/keep/hands_compare.png: KEEP adds only ~38 px, verify fingers are really back.
 - Previous batch: pixelcel (done, refer to docs/specs/pixelcel/tasks/HANDOFF.md). Outline ring fix d5f29d4.
 
 ## Waves
@@ -19,4 +19,4 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
   Edit tool or a Python file, not inline escapes.
 
 ## Next
-- After the owner approves plan 10: `bash tools/cards/run_cards.sh T01 T01b T02` (background).
+- After the owner approves plan 10: `bash tools/cards/run_cards.sh T01b T02` (background).
