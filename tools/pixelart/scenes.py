@@ -604,3 +604,62 @@ def pixel_cel_both_styles(scene, enabled=True):
 
 def pixel_cel_both_styles_off(scene):
     pixel_cel_both_styles(scene, False)
+
+
+# --- Face SDF (Pixelizer third_party CL SDF fork, pitch-packed texture) ------------------------------------------------
+# Suzanne alone with one sun at a head-space light direction: h = horizontal angle (0 = behind, 180 = front, positive =
+# the head's left, +X), e = elevation (+ = above). The SDF is the unpainted one made by the add-on from Suzanne itself
+# (content/malt/face_sdf/suzanne), so the Face SDF result must match N.L > 0 wherever no interpolation is involved.
+FACE_SDF_DIR = 'H:/GameDev/Pixelizer/content/malt/face_sdf/suzanne/SDF'
+
+
+def _face_sdf_scene(scene, h, e, shader):
+    import os
+    import mathutils
+    ray_traced(scene)
+    suzanne = bpy.data.objects['Suzanne']
+    _solo(scene, [suzanne])
+    for obj in list(scene.objects):
+        if obj.type == 'LIGHT':
+            bpy.data.objects.remove(obj, do_unlink=True)
+    hr, er = math.radians(h), math.radians(e)
+    to_light = mathutils.Vector((math.sin(hr) * math.cos(er), math.cos(hr) * math.cos(er), math.sin(er)))
+    sun = _sun(scene, 0.0)
+    sun.rotation_euler = (-to_light).to_track_quat('-Z', 'Y').to_euler()
+    _frame_objects(scene, [suzanne], 256)
+    _debug_shader(scene, shader)
+    material = suzanne.material_slots[0].material
+    # Shader-source materials keep their uniforms in material.malt.parameters, which exist only after Malt compiled
+    # the shader: render_gui calls this back once the materials are ready
+    if shader == 'face_sdf_plain.mesh.glsl':
+        return None   # plain Pixel Cel never reads the SDF, so its uniforms are compiled out
+    return lambda: _face_sdf_textures(material)
+
+
+def _face_sdf_textures(material):
+    import os
+    assert not material.malt.compiler_error, material.malt.compiler_error
+    textures = material.malt.parameters.textures
+    for uniform, name in (('face_sdf_texture', 'T_Face_SDF_Pitch.png'),
+                         ('face_sdf_flip_texture', 'T_Face_SDF_Pitch_Flip.png')):
+        image = bpy.data.images.load(os.path.join(FACE_SDF_DIR, name), check_existing=True)
+        image.colorspace_settings.name = 'Non-Color'
+        if uniform not in textures.keys():
+            from BlenderMalt import MaltMaterial
+            compiled = MaltMaterial._MATERIALS.get(material.malt.get_source_path())
+            raise AssertionError('no %s texture parameter; textures %s; rna %s; compiled parameters %s' % (
+                uniform, list(textures.keys()), list(material.malt.parameters.get_rna().keys()),
+                compiled and list(compiled.parameters.keys())))
+        textures[uniform].texture = image
+    material.update_tag()
+
+
+_FACE_SDF_LIGHTS = {'l120': (120, 0), 'l60': (60, 0), 'r120': (-120, 0), 'u45': (120, 45), 'u30': (120, 30),
+                    'd45': (120, -45)}
+for _key, (_h, _e) in _FACE_SDF_LIGHTS.items():
+    globals()['face_sdf_' + _key] = (lambda h, e: lambda scene: _face_sdf_scene(
+        scene, h, e, 'face_sdf_debug.mesh.glsl'))(_h, _e)
+    globals()['face_cel_' + _key] = (lambda h, e: lambda scene: _face_sdf_scene(
+        scene, h, e, 'face_sdf_cel.mesh.glsl'))(_h, _e)
+    globals()['face_plain_' + _key] = (lambda h, e: lambda scene: _face_sdf_scene(
+        scene, h, e, 'face_sdf_plain.mesh.glsl'))(_h, _e)

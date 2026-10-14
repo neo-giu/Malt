@@ -52,7 +52,10 @@ def setup_one(setup, out_dir):
             if setup:
                 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
                 import scenes
-                getattr(scenes, setup)(bpy.context.scene)
+                # A setup may return a callable: it runs once the materials are compiled (for example to assign
+                # textures to shader uniforms, which exist only after a compile), then the wait starts again
+                after = getattr(scenes, setup)(bpy.context.scene)
+                state['after_ready'] = after if callable(after) else None
                 print("setup", setup, file=log, flush=True)
             return True
         except Exception:
@@ -98,6 +101,17 @@ def run():
             ready, why = False, traceback.format_exc()
         if not ready and state['waited'] < 60.0:
             state['waited'] += 0.5
+            return 0.5
+        if ready and state.get('after_ready'):
+            after, state['after_ready'] = state['after_ready'], None
+            with _log(out_dir) as log:
+                try:
+                    after()
+                    print("after_ready done", file=log, flush=True)
+                except Exception:
+                    print(traceback.format_exc(), file=log, flush=True)
+                    state['phase'] = 'next'
+                    return 0.1
             return 0.5
         with _log(out_dir) as log:
             print("ready" if ready else "NOT READY after 60 s: " + why, "waited %.1fs" % state['waited'], file=log, flush=True)
