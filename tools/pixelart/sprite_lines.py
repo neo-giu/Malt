@@ -1,8 +1,7 @@
 # tools/pixelart/sprite_lines.py
 """Line statistics of reference sprites: where do artists keep L corners and 2x2 line blocks?
     python sprite_lines.py OUT_DIR SPRITE.gif|png [SPRITE ...] [--lines r,g,b;r,g,b;...]
-Line pixels = the darkest colour of each ramp. Ramps are found by grouping the palette by Oklab hue/chroma (k = 6),
-unless --lines gives the line colours. Every frame of a GIF is used. Prints per sprite: line px, 2x2 blocks,
+Line pixels = dark strokes at most 2 px wide (stroke_mask), or the colours --lines gives. Every frame of a GIF is used. Prints per sprite: line px, 2x2 blocks,
 L corners, and the L corners sorted by situation; writes a 4x overlay per sprite (red = L corner, blue = block)."""
 import os
 import sys
@@ -11,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, 'H:/GameDev/Pixelizer/src')
-from pixelizer.oklab import group_ramps, srgb_to_oklab   # noqa: E402
+from pixelizer.oklab import srgb_to_oklab   # noqa: E402
 
 N4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 N8 = N4 + [(-1, -1), (-1, 1), (1, -1), (1, 1)]
@@ -24,25 +23,43 @@ def frames(path):
         yield np.array(im.convert('RGBA'))
 
 
-def line_colours(images, groups=6):
-    opaque = np.concatenate([a[a[..., 3] > 0][:, :3] for a in images])
-    colours, counts = np.unique(opaque, axis=0, return_counts=True)
-    keep = counts >= 3                      # stray colours (a few px) are not ramp members
-    colours = colours[keep]
-    ramps = group_ramps(colours, min(groups, len(colours)))
-    return {tuple(int(v) for v in colours[r[-1]]) for r in ramps if r}   # r is sorted light -> dark
-
-
-def shift(m, dy, dx):
-    p = np.pad(m, 1)
+def shift(m, dy, dx, fill=False):
+    p = np.pad(m, 1, constant_values=fill)
     return p[1 + dy:1 + dy + m.shape[0], 1 + dx:1 + dx + m.shape[1]]
 
 
-def analyse(a, lines):
+def shift2(m, dy, dx, fill):
+    p = np.pad(m, 2, constant_values=fill)
+    return p[2 + dy:2 + dy + m.shape[0], 2 + dx:2 + dx + m.shape[1]]
+
+
+def stroke_mask(a, delta=0.12):
+    # Line pixels by shape, no palette needed: a dark stroke at most 2 px wide with lighter pixels (Oklab L at least
+    # delta brighter) on both sides across it, in one of 4 directions. Background counts as light, so silhouette lines
+    # are found and solid dark fills (hair, belts) are not.
+    opaque = a[..., 3] > 0
+    light = np.where(opaque, srgb_to_oklab(a[..., :3].reshape(-1, 3)).reshape(a.shape[:2] + (3,))[..., 0], 2.0)
+    line = np.zeros(opaque.shape, bool)
+    for dy, dx in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        sides = []
+        for s in (1, -1):
+            n1 = shift2(light, s * dy, s * dx, 2.0)
+            n2 = shift2(light, 2 * s * dy, 2 * s * dx, 2.0)
+            # 1 px: the neighbour is lighter; 2 px: the neighbour is as dark as p and the next one is lighter
+            sides.append((n1 - light > delta) | ((np.abs(n1 - light) < delta / 2) & (n2 - light > delta)))
+        line |= sides[0] & sides[1]
+    return opaque & line
+
+
+def colour_mask(a, lines):
+    rgb = a[..., :3].astype(int)
+    key = (rgb[..., 0] << 16) | (rgb[..., 1] << 8) | rgb[..., 2]
+    return (a[..., 3] > 0) & np.isin(key, [(r << 16) | (g << 8) | b for r, g, b in lines])
+
+
+def analyse(a, L):
     opaque = a[..., 3] > 0
     rgb = a[..., :3]
-    L = opaque & np.isin(rgb.view([('', rgb.dtype)] * 3)[..., 0],
-                         np.array(sorted(lines), dtype=rgb.dtype).view([('', rgb.dtype)] * 3)[:, 0])
     n = {d: shift(L, *d) for d in N8}
     bg = {d: ~shift(opaque, *d) for d in N8}
     up, dn, lf, rt = n[(-1, 0)], n[(1, 0)], n[(0, -1)], n[(0, 1)]
@@ -79,6 +96,38 @@ def analyse(a, lines):
     }, L, lcorner, block
 
 
+
+def classify_blocks(L, opaque):
+    # 2x2 line blocks outside solid fills, sorted by the line branches on the 12-pixel ring around them:
+    # junction = 3+ branches meet; bend = 2 branches less than 90 degrees apart around the ring; run = a straight stroke
+    n8 = sum(shift(L, *d).astype(int) for d in N8)
+    fill = L & (n8 >= 7)
+    near = fill.copy()
+    for d in N8:
+        near |= shift(fill, *d)
+    tl = L & shift(L, 0, 1) & shift(L, 1, 0) & shift(L, 1, 1)
+    out = {'blocks': 0, 'junction': 0, 'bend': 0, 'run': 0, 'end': 0, 'on_silhouette': 0}
+    h, w = L.shape
+    for y, x in zip(*np.nonzero(tl)):
+        if near[y:y + 2, x:x + 2].any():
+            continue
+        out['blocks'] += 1
+        ring = [(y - 1, x - 1), (y - 1, x), (y - 1, x + 1), (y - 1, x + 2), (y, x + 2), (y + 1, x + 2), (y + 2, x + 2),
+                (y + 2, x + 1), (y + 2, x), (y + 2, x - 1), (y + 1, x - 1), (y, x - 1)]
+        inside = [0 <= py < h and 0 <= px < w for py, px in ring]
+        v = [inside[i] and bool(L[ring[i]]) for i in range(12)]
+        starts = [i for i in range(12) if v[i] and not v[i - 1]]
+        if any(inside[i] and not opaque[ring[i]] for i in range(12)) or not all(inside):
+            out['on_silhouette'] += 1
+        if len(starts) >= 3:
+            out['junction'] += 1
+        elif len(starts) == 2:
+            d = (starts[1] - starts[0]) % 12
+            out['bend' if min(d, 12 - d) <= 4 else 'run'] += 1
+        else:
+            out['end'] += 1
+    return out
+
 def main():
     args = sys.argv[1:]
     out = args.pop(0)
@@ -90,10 +139,10 @@ def main():
     os.makedirs(out, exist_ok=True)
     for path in args:
         images = list(frames(path))
-        lines = lines_arg or line_colours(images)
         total = {}
         for k, a in enumerate(images):
-            stats, L, lc, bl = analyse(a, lines)
+            stats, L, lc, bl = analyse(a, colour_mask(a, lines_arg) if lines_arg else stroke_mask(a))
+            stats.update({'b_' + k: v for k, v in classify_blocks(L, a[..., 3] > 0).items()})
             for key, v in stats.items():
                 total[key] = total.get(key, 0) + v
             if k == 0:
@@ -104,13 +153,18 @@ def main():
                 Image.fromarray(vis).resize((a.shape[1] * 4, a.shape[0] * 4), Image.NEAREST).save(
                     os.path.join(out, os.path.splitext(os.path.basename(path))[0] + '_lines.png'))
         lc = max(1, total['l_corners'])
-        print(os.path.basename(path), 'frames', len(images), 'line colours', sorted(lines))
+        print(os.path.basename(path), 'frames', len(images), 'lines by', 'colour' if lines_arg else 'stroke shape')
         print('  per frame: line px %.0f  2x2 blocks %.1f  L corners %.1f (%.1f per 100 line px)' % (
             total['line'] / len(images), total['blocks'] / len(images), total['l_corners'] / len(images),
             100.0 * total['l_corners'] / max(1, total['line'])))
         print('  L corners: convex tip %d%%  concave %d%%  other silhouette %d%%  inner %d%% (overlap %d%% of inner)' % (
             100 * total['convex_tip'] // lc, 100 * total['concave'] // lc, 100 * total['silhouette_other'] // lc,
             100 * total['inner'] // lc, 100 * total['inner_overlap'] // max(1, total['inner'])))
+        tb = max(1, total['b_blocks'])
+        print('  thin-line 2x2 blocks %.1f per frame (%.1f per 100 line px): junction %d%%  run %d%%  bend %d%%  end %d%%'
+              '  on silhouette %d%%' % (total['b_blocks'] / len(images), 100.0 * total['b_blocks'] / max(1, total['line']),
+              100 * total['b_junction'] // tb, 100 * total['b_run'] // tb, 100 * total['b_bend'] // tb,
+              100 * total['b_end'] // tb, 100 * total['b_on_silhouette'] // tb))
         print('  junction px per frame %.1f, block px on the silhouette %d%%' % (
             total['junction_px'] / len(images), 100 * total['block_px_ring'] // max(1, 4 * total['blocks'])))
 

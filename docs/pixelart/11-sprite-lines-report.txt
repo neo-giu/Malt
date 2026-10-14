@@ -1,0 +1,105 @@
+aigis-persona4arena-stance-face-right.gif frames 10 lines by stroke shape
+  per frame: line px 3658  2x2 blocks 135.7  L corners 32.5 (0.9 per 100 line px)
+  L corners: convex tip 9%  concave 4%  other silhouette 4%  inner 80% (overlap 42% of inner)
+  thin-line 2x2 blocks 121.3 per frame (3.3 per 100 line px): junction 46%  run 40%  bend 8%  end 4%  on silhouette 34%
+  junction px per frame 1348.8, block px on the silhouette 11%
+bridget-walk.gif frames 10 lines by stroke shape
+  per frame: line px 1660  2x2 blocks 86.8  L corners 17.6 (1.1 per 100 line px)
+  L corners: convex tip 14%  concave 2%  other silhouette 15%  inner 67% (overlap 45% of inner)
+  thin-line 2x2 blocks 53.9 per frame (3.2 per 100 line px): junction 31%  run 52%  bend 5%  end 10%  on silhouette 36%
+  junction px per frame 720.2, block px on the silhouette 10%
+carmine-unist-sprite-attack25.png frames 1 lines by stroke shape
+  per frame: line px 1644  2x2 blocks 177.0  L corners 26.0 (1.6 per 100 line px)
+  L corners: convex tip 15%  concave 3%  other silhouette 11%  inner 69% (overlap 33% of inner)
+  thin-line 2x2 blocks 122.0 per frame (7.4 per 100 line px): junction 18%  run 57%  bend 13%  end 11%  on silhouette 42%
+  junction px per frame 958.0, block px on the silhouette 11%
+dizzy-winds.gif frames 9 lines by stroke shape
+  per frame: line px 1882  2x2 blocks 177.1  L corners 20.4 (1.1 per 100 line px)
+  L corners: convex tip 13%  concave 1%  other silhouette 2%  inner 83% (overlap 52% of inner)
+  thin-line 2x2 blocks 107.1 per frame (5.7 per 100 line px): junction 27%  run 53%  bend 8%  end 10%  on silhouette 46%
+  junction px per frame 1039.8, block px on the silhouette 15%
+hakumen-stance.gif frames 12 lines by stroke shape
+  per frame: line px 5693  2x2 blocks 206.2  L corners 34.5 (0.6 per 100 line px)
+  L corners: convex tip 19%  concave 2%  other silhouette 4%  inner 73% (overlap 44% of inner)
+  thin-line 2x2 blocks 160.0 per frame (2.8 per 100 line px): junction 27%  run 57%  bend 7%  end 7%  on silhouette 26%
+  junction px per frame 2065.8, block px on the silhouette 10%
+hyde-uniel-stance-animation.gif frames 18 lines by stroke shape
+  per frame: line px 2944  2x2 blocks 492.2  L corners 37.1 (1.3 per 100 line px)
+  L corners: convex tip 3%  concave 2%  other silhouette 4%  inner 89% (overlap 42% of inner)
+  thin-line 2x2 blocks 217.9 per frame (7.4 per 100 line px): junction 13%  run 64%  bend 9%  end 12%  on silhouette 44%
+  junction px per frame 1891.6, block px on the silhouette 14%
+justice-stance11.gif frames 11 lines by stroke shape
+  per frame: line px 4229  2x2 blocks 481.5  L corners 29.8 (0.7 per 100 line px)
+  L corners: convex tip 17%  concave 0%  other silhouette 5%  inner 76% (overlap 56% of inner)
+  thin-line 2x2 blocks 312.3 per frame (7.4 per 100 line px): junction 17%  run 67%  bend 8%  end 7%  on silhouette 42%
+  junction px per frame 2619.1, block px on the silhouette 11%
+may-clapclap1.gif frames 3 lines by stroke shape
+  per frame: line px 2685  2x2 blocks 68.7  L corners 35.0 (1.3 per 100 line px)
+  L corners: convex tip 11%  concave 2%  other silhouette 10%  inner 75% (overlap 75% of inner)
+  thin-line 2x2 blocks 36.3 per frame (1.4 per 100 line px): junction 51%  run 24%  bend 9%  end 14%  on silhouette 33%
+  junction px per frame 898.7, block px on the silhouette 8%
+ragna-stance.gif frames 12 lines by stroke shape
+  per frame: line px 3055  2x2 blocks 214.5  L corners 33.6 (1.1 per 100 line px)
+  L corners: convex tip 4%  concave 0%  other silhouette 4%  inner 90% (overlap 58% of inner)
+  thin-line 2x2 blocks 171.9 per frame (5.6 per 100 line px): junction 17%  run 57%  bend 8%  end 15%  on silhouette 13%
+  junction px per frame 1340.4, block px on the silhouette 5%
+sho-minzauki-persona4arena-stance.gif frames 49 lines by stroke shape
+  per frame: line px 3475  2x2 blocks 133.9  L corners 54.9 (1.6 per 100 line px)
+  L corners: convex tip 9%  concave 1%  other silhouette 9%  inner 78% (overlap 43% of inner)
+  thin-line 2x2 blocks 113.9 per frame (3.3 per 100 line px): junction 24%  run 51%  bend 10%  end 13%  on silhouette 40%
+  junction px per frame 1378.6, block px on the silhouette 15%
+solstancefix.gif frames 8 lines by stroke shape
+  per frame: line px 1974  2x2 blocks 120.6  L corners 27.5 (1.4 per 100 line px)
+  L corners: convex tip 12%  concave 0%  other silhouette 23%  inner 64% (overlap 64% of inner)
+  thin-line 2x2 blocks 65.4 per frame (3.3 per 100 line px): junction 18%  run 56%  bend 7%  end 17%  on silhouette 56%
+  junction px per frame 884.2, block px on the silhouette 20%
+tager-stance.gif frames 12 lines by stroke shape
+  per frame: line px 5253  2x2 blocks 323.5  L corners 48.8 (0.9 per 100 line px)
+  L corners: convex tip 11%  concave 0%  other silhouette 1%  inner 86% (overlap 66% of inner)
+  thin-line 2x2 blocks 207.7 per frame (4.0 per 100 line px): junction 16%  run 67%  bend 7%  end 9%  on silhouette 15%
+  junction px per frame 1604.6, block px on the silhouette 5%
+teddie-wave.gif frames 5 lines by stroke shape
+  per frame: line px 2371  2x2 blocks 38.6  L corners 33.2 (1.4 per 100 line px)
+  L corners: convex tip 3%  concave 0%  other silhouette 1%  inner 94% (overlap 36% of inner)
+  thin-line 2x2 blocks 36.6 per frame (1.5 per 100 line px): junction 14%  run 65%  bend 2%  end 17%  on silhouette 16%
+  junction px per frame 372.2, block px on the silhouette 6%
+athena-12s.gif frames 17 lines by stroke shape
+  per frame: line px 1685  2x2 blocks 96.1  L corners 14.8 (0.9 per 100 line px)
+  L corners: convex tip 13%  concave 0%  other silhouette 6%  inner 80% (overlap 61% of inner)
+  thin-line 2x2 blocks 81.8 per frame (4.9 per 100 line px): junction 28%  run 59%  bend 6%  end 4%  on silhouette 40%
+  junction px per frame 740.9, block px on the silhouette 14%
+kim.gif frames 10 lines by stroke shape
+  per frame: line px 1985  2x2 blocks 80.9  L corners 23.1 (1.2 per 100 line px)
+  L corners: convex tip 3%  concave 1%  other silhouette 9%  inner 85% (overlap 54% of inner)
+  thin-line 2x2 blocks 70.3 per frame (3.5 per 100 line px): junction 43%  run 38%  bend 7%  end 10%  on silhouette 37%
+  junction px per frame 852.0, block px on the silhouette 12%
+king.gif frames 9 lines by stroke shape
+  per frame: line px 873  2x2 blocks 45.8  L corners 15.4 (1.8 per 100 line px)
+  L corners: convex tip 8%  concave 10%  other silhouette 10%  inner 69% (overlap 32% of inner)
+  thin-line 2x2 blocks 40.7 per frame (4.7 per 100 line px): junction 29%  run 54%  bend 4%  end 11%  on silhouette 66%
+  junction px per frame 438.2, block px on the silhouette 19%
+kyo-12s.gif frames 11 lines by stroke shape
+  per frame: line px 1325  2x2 blocks 58.8  L corners 19.1 (1.4 per 100 line px)
+  L corners: convex tip 0%  concave 3%  other silhouette 5%  inner 90% (overlap 50% of inner)
+  thin-line 2x2 blocks 53.3 per frame (4.0 per 100 line px): junction 33%  run 42%  bend 8%  end 16%  on silhouette 30%
+  junction px per frame 506.1, block px on the silhouette 11%
+mai-kof13-walkforward.gif frames 10 lines by stroke shape
+  per frame: line px 1379  2x2 blocks 142.4  L corners 14.3 (1.0 per 100 line px)
+  L corners: convex tip 22%  concave 6%  other silhouette 14%  inner 56% (overlap 32% of inner)
+  thin-line 2x2 blocks 84.5 per frame (6.1 per 100 line px): junction 24%  run 52%  bend 14%  end 8%  on silhouette 37%
+  junction px per frame 705.6, block px on the silhouette 8%
+maxima-kof13-stance.gif frames 12 lines by stroke shape
+  per frame: line px 1591  2x2 blocks 56.3  L corners 20.2 (1.3 per 100 line px)
+  L corners: convex tip 0%  concave 1%  other silhouette 12%  inner 85% (overlap 36% of inner)
+  thin-line 2x2 blocks 49.0 per frame (3.1 per 100 line px): junction 21%  run 53%  bend 8%  end 15%  on silhouette 34%
+  junction px per frame 575.8, block px on the silhouette 11%
+saiki-human-stance.gif frames 66 lines by stroke shape
+  per frame: line px 1262  2x2 blocks 69.1  L corners 12.1 (1.0 per 100 line px)
+  L corners: convex tip 7%  concave 0%  other silhouette 16%  inner 74% (overlap 45% of inner)
+  thin-line 2x2 blocks 58.9 per frame (4.7 per 100 line px): junction 34%  run 48%  bend 7%  end 9%  on silhouette 50%
+  junction px per frame 571.0, block px on the silhouette 17%
+saiki-stance-noeffects.gif frames 9 lines by stroke shape
+  per frame: line px 694  2x2 blocks 54.0  L corners 11.9 (1.7 per 100 line px)
+  L corners: convex tip 0%  concave 0%  other silhouette 13%  inner 85% (overlap 56% of inner)
+  thin-line 2x2 blocks 42.1 per frame (6.1 per 100 line px): junction 18%  run 36%  bend 19%  end 25%  on silhouette 35%
+  junction px per frame 324.8, block px on the silhouette 11%
