@@ -31,6 +31,7 @@ see it fail (quote the failing line), implement, see it pass, commit once.
 ## Done when
 - [ ] palette_check on pixel_pal_asw, pixel_pal_kof, pixel_pal_dude, pixel_pal_edit -> exit 0, foreign colours 0, colours <= 40 (each quoted)
 - [ ] pixel_pal_edit frame holds (255, 0, 0) px (count quoted)
+- [ ] pixel_pal_asw_bias: palette_check exit 0, zone-boundary pairs lower than pixel_pal_asw (both quoted)
 - [ ] marker launch: line_check --marker on pixel_pal_asw and pixel_pal_kof -> total 0, outside 0
 - [ ] zoom sheet of asw / kof / dude read by you
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`

@@ -30,7 +30,7 @@ No Blender launch in this card.
   and stop.
 
 ## Done when
-- [ ] `pytest tests/pixelart -q` -> all pass (zones 11 new)
+- [ ] `pytest tests/pixelart -q` -> all pass (zones 14 new)
 - [ ] plan Step 6 command on APRL_baseX.png -> the printed clusters / merged line quoted
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`
 

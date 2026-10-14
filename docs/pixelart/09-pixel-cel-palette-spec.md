@@ -50,7 +50,9 @@ New pure module `Malt/PixelArt/zones.py` (tested outside Blender):
    cluster mean, darker slots by the existing hue shift (`shifted_shadow`: toward 260 degrees, saturation x1.25, value
    steps), lightest slot = the highlight. Line = darkest slot x 0.6 value, hue kept.
 5. Output: a zone index texture per material (R8, nearest, mip levels by majority vote, so a zone never blends) and the
-   palette (section 3).
+   palette (section 3). Malt builds averaged mipmaps for images, so the levels are packed side by side in one image
+   (mip atlas); the shader picks the level from the pixel's texel footprint plus `Zone LOD Bias`, a per-material
+   input (owner, 2026-10-14: "mipmap levels now, with the possibility of bias per material/texture").
 
 ## 5. Shading with a palette (Pixel Cel)
 

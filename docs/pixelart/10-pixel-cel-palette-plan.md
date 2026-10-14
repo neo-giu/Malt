@@ -317,6 +317,8 @@ git commit -m "Pixel Lines: KEEP parts (hands, fingers, straps) never vanish: co
   - `gpu_palette(palette) -> uint8 [2R, 8, 4]` (row 2r: slot colours, column 7 = line; row 2r+1: R = stop x 255 in
     columns 0..5, G of column 0 = slot count)
   - `ramp_index_texture(labels, material, palette) -> uint8 HxW` (ramp index + 1, 0 = no zone)
+  - `zone_mips(index uint8 HxW) -> list[uint8 array]` (majority vote per 2x2, down to 1x1)
+  - `mip_atlas(levels) -> (atlas uint8 H x sum(widths), offsets list[int])` (levels side by side, y = 0)
 - Consumes: `cel_ref.shifted_shadow`, `cel_ref.srgb_to_linear`, `cel_ref.linear_to_srgb`; `PRESETS[...]['palette_slots']`,
   `PRESETS[...]['palette_stops']`.
 
@@ -671,12 +673,70 @@ def ramp_index_texture(labels, material, palette):
         if ramp is not None:
             t[labels == cluster] = names.index(ramp) + 1
     return t
+
+
+def zone_mips(index):
+    # Mip levels of a ramp-index texture by majority vote of each 2x2 block (a zone never blends; spec 09 4.5).
+    # Ties: the most common value of the block's top-left first order (top-left, top-right, bottom-left, bottom-right).
+    # Odd sizes repeat the last row / column. Stops at 1x1.
+    levels = [np.asarray(index, np.uint8)]
+    while levels[-1].shape[0] > 1 or levels[-1].shape[1] > 1:
+        a = levels[-1]
+        if a.shape[0] % 2:
+            a = np.vstack([a, a[-1:]])
+        if a.shape[1] % 2:
+            a = np.hstack([a, a[:, -1:]])
+        quad = np.stack([a[0::2, 0::2], a[0::2, 1::2], a[1::2, 0::2], a[1::2, 1::2]], -1)   # h/2 x w/2 x 4
+        counts = (quad[..., :, None] == quad[..., None, :]).sum(-1)                          # votes per child
+        best = counts.argmax(-1)                                                             # first max = tie order
+        levels.append(np.take_along_axis(quad, best[..., None], -1)[..., 0])
+    return levels
+
+
+def mip_atlas(levels):
+    # All levels side by side in one image (Malt builds averaged mipmaps for images, so the levels are packed by hand):
+    # level l at x = sum of the widths of levels < l, y = 0. Returns (atlas uint8 H x W_total, x offsets per level).
+    h = levels[0].shape[0]
+    offsets, x = [], 0
+    for level in levels:
+        offsets.append(x)
+        x += level.shape[1]
+    atlas = np.zeros((h, x), np.uint8)
+    for level, ox in zip(levels, offsets):
+        atlas[:level.shape[0], ox:ox + level.shape[1]] = level
+    return atlas, offsets
+```
+
+Add these tests to `tests/pixelart/test_zones.py` (they fail with `AttributeError: zone_mips` before Step 4):
+
+```python
+def test_zone_mips_majority_vote_never_blends():
+    t = np.array([[1, 1, 2, 2],
+                  [1, 3, 2, 2],
+                  [4, 4, 5, 6],
+                  [4, 4, 7, 8]], np.uint8)
+    levels = Z.zone_mips(t)
+    assert [l.shape for l in levels] == [(4, 4), (2, 2), (1, 1)]
+    assert levels[1].tolist() == [[1, 2], [4, 5]]      # 3-of-4 majority; 5,6,7,8 tie -> top-left 5
+    assert set(np.unique(levels[1])) <= set(np.unique(t))
+
+
+def test_zone_mips_odd_size():
+    levels = Z.zone_mips(np.ones((5, 3), np.uint8))
+    assert [l.shape for l in levels] == [(5, 3), (3, 2), (2, 1), (1, 1)]
+
+
+def test_mip_atlas_offsets():
+    levels = Z.zone_mips(np.arange(16, dtype=np.uint8).reshape(4, 4))
+    atlas, offsets = Z.mip_atlas(levels)
+    assert offsets == [0, 4, 6] and atlas.shape == (4, 7)
+    assert np.array_equal(atlas[:2, 4:6], levels[1])
 ```
 
 - [ ] **Step 5: Run the tests, see them pass**
 
 Run: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`
-Expected: all pass (zones 11 new). Fix the code, never the tests, if one fails; record what differed in the
+Expected: all pass (zones 14 new). Fix the code, never the tests, if one fails; record what differed in the
 mechanics note.
 
 - [ ] **Step 6: Check the real April textures (no Blender)**
@@ -706,7 +766,8 @@ git commit -m "Pixel Cel: zones.py (Oklab k-means zones, island merge, palette r
 
 **Interfaces:**
 - Produces: `cel_ref.palette_slot(s, stops, n_slots, shadowed, highlight) -> int`; Pixel Cel inputs `use_palette`
-  (bool, default false), `zone_texture` (sampler2D), `palette` (sampler2D); `line_data.w = 0.5` when the palette is on.
+  (bool, default false), `zone_texture` (sampler2D, the mip atlas), `zone_size` (ivec2), `zone_levels` (int),
+  `zone_lod_bias` (float, per material), `palette` (sampler2D); `line_data.w = 0.5` when the palette is on.
 - Consumes: `gpu_palette` layout (Task 2): row 2r colours (column 7 line), row 2r+1 stops (R x 255, columns 0..5) and
   slot count (G of column 0); zone texture R = ramp index + 1 (8-bit, 0 = none).
 
@@ -743,8 +804,39 @@ def palette_slot(s, stops, n_slots, shadowed, highlight):
 
 - [ ] **Step 4: GLSL (PixelCel.glsl)**
 
-META: `@use_palette: default=false;`. New parameters after `bool unlit, int light_group, bool shadows, bool self_shadows,`:
-`bool use_palette, sampler2D zone_texture, sampler2D palette,` (before the `out` parameters). Helper:
+META: `@use_palette: default=false;`, `@zone_size: default=ivec2(1, 1);`, `@zone_levels: default=1;`,
+`@zone_lod_bias: default=0.0;`. New parameters after `bool unlit, int light_group, bool shadows, bool self_shadows,`:
+`bool use_palette, sampler2D zone_texture, ivec2 zone_size, int zone_levels, float zone_lod_bias, sampler2D palette,`
+(before the `out` parameters). `zone_texture` is the mip atlas of Task 2 (`mip_atlas`), `zone_size` its level-0 size,
+`zone_levels` the level count; the converter sets all three (Task 4). `zone_lod_bias` is the owner's per-material
+bias: negative = finer zones (more detail, more flicker), positive = coarser. Zone helper:
+
+```glsl
+int _pixel_cel_zone(sampler2D atlas, ivec2 size0, int levels, vec2 uv, float bias)
+{
+    // Level from the screen footprint of one pixel in level-0 texels (like GL's LOD), plus the material's bias.
+    // The atlas holds the majority-vote levels side by side (level l at x = sum of the widths below l), read exactly.
+    vec2 t = uv * vec2(size0);
+    float rho = max(length(dFdx(t)), length(dFdy(t)));
+    int level = clamp(int(floor(log2(max(rho, 1e-6)) + bias + 0.5)), 0, levels - 1);
+    int x0 = 0;
+    ivec2 size = size0;
+    for(int l = 0; l < level; l++)
+    {
+        x0 += size.x;
+        size = max((size + 1) / 2, ivec2(1));
+    }
+    ivec2 texel = clamp(ivec2(floor(fract(uv) * vec2(size))), ivec2(0), size - 1);
+    // numpy builds the atlas top-down with every level at the top (rows 0..h_l-1); Blender stores images bottom-up,
+    // so in GL rows level l spans size0.y - size.y .. size0.y - 1, and uv.y = 0 is the level's bottom row.
+    return int(round(texelFetch(atlas, ivec2(x0 + texel.x, size0.y - size.y + texel.y), 0).r * 255.0));
+}
+```
+
+Mapping check: `pixel_pal_dude` (one zone, a 1x1 texture) and the April frames must hold palette colours only
+(Task 4 Step 4); a wrong row formula shows as foreign or wrong-ramp colours there.
+
+Slot helper:
 
 ```glsl
 int _pixel_cel_slot(sampler2D palette, int row, float s, bool shadowed, bool highlight, out int n_slots)
@@ -767,8 +859,7 @@ At the end of `pixel_cel` (after `color` and `line_data.z` are set), when `use_p
 ```glsl
     if(use_palette)
     {
-        ivec2 zsize = textureSize(zone_texture, 0);
-        int zone = int(round(texelFetch(zone_texture, clamp(ivec2(uv * vec2(zsize)), ivec2(0), zsize - 1), 0).r * 255.0));
+        int zone = _pixel_cel_zone(zone_texture, zone_size, zone_levels, uv, zone_lod_bias);
         if(zone > 0)
         {
             int row = zone - 1, n_slots;
@@ -784,10 +875,9 @@ At the end of `pixel_cel` (after `color` and `line_data.z` are set), when `use_p
 ```
 
 `_pixel_cel_tone` must return `s` too: add an `out float s_out` parameter (set to `s`), and keep `best_s` beside
-`best_t` in the light loop. Unlit with palette: slot 1 (lit) of its ramp, `line_data.z` as for lit. Note: the zone
-texture is read with `texelFetch` at level 0 (nearest, never blended: Malt builds averaged mipmaps for images, which
-would mix ramp indices). The island merge of Task 2 is the speck control; spec 09 section 4.5's majority mips are
-dropped for now (say so in the Report).
+`best_t` in the light loop. Unlit with palette: slot 1 (lit) of its ramp, `line_data.z` as for lit. The zone texture
+is never sampled with `texture()`: Malt builds averaged mipmaps for images, which would mix ramp indices; the levels
+come from the atlas only.
 
 - [ ] **Step 4b: line_data.z encoding (both shaders)** — `line_data.z`: 0 = outline everywhere (ASW), 0.5 =
 shadow-only material in its darkest tone/slot, 1 = shadow-only material not in its darkest tone/slot. Change the two
@@ -924,7 +1014,10 @@ def build_collection_palette(objects, preset, budget=40):
             t = np.full((1, 1), 1 + list(palette['ramps']).index(palette['zone_ramp'][f'{name}/0']), np.uint8)
         else:
             t = Z.ramp_index_texture(lab, name, palette)
-        images[name] = _new_image(f'PixelCel Zones {name}', t)
+        atlas, _ = Z.mip_atlas(Z.zone_mips(t))
+        images[name] = _new_image(f'PixelCel Zones {name}', atlas)
+        images[name]['zone_size'] = [int(t.shape[1]), int(t.shape[0])]
+        images[name]['zone_levels'] = len(Z.zone_mips(t))
     ramps = len(palette['ramps'])
     print('PALETTE_REPORT', ramps, sum(len(r['colours']) + 1 for r in palette['ramps'].values()), flush=True)
     return palette, images
@@ -935,8 +1028,15 @@ owner's editing surface: when `apply_strip` reads it back, the strip's sRGB byte
 
 In `convert_objects(objects, preset='ASW', palette=True)`: when `palette`, call `build_collection_palette` first and,
 for each converted tree, `_set(tree, cel, 'use_palette', True, written)`, `_set(tree, cel, 'palette', images['gpu'], written)`,
-`_set(tree, cel, 'zone_texture', images[material.name], written)`. Trees become per material when the palette is on
-(the zone texture is per material): key = `plan.key + '|' + preset + '|' + material.name`.
+`_set(tree, cel, 'zone_texture', images[material.name], written)`, and from the image's custom properties
+`zone_size` (ivec2: set through `_set` as a tuple; if Malt stores int vectors elsewhere, find the parameter collection
+the way bools were found, record it in the mechanics note) and `zone_levels` (int). `zone_lod_bias` is left at its
+default 0.0 and recorded in `pixel_cel_set`, so a hand-set bias survives a reconvert (the T06 rule). Trees become per
+material when the palette is on (the zone texture is per material): key = `plan.key + '|' + preset + '|' + material.name`.
+
+Add a setup `pixel_pal_asw_bias` = `pixel_pal_asw` with `zone_lod_bias` = +2.0 on every converted tree (set on
+`tree.malt_parameters` after the conversion): its frame must still pass palette_check and show fewer distinct zone
+boundaries (count of 4-neighbour pairs with different colours inside the silhouette, both printed: bias 2 < bias 0).
 
 Image sampling: the GPU palette and zone images are read with `texelFetch`; check that Malt uploads them without
 colour conversion (Non-Color). If a frame colour is off by a few values from the JSON in Step 4, the image is being
@@ -1011,13 +1111,14 @@ that one line in `setup_one` (fence: render_gui.py, this line only).
 - [ ] **Step 4: Verify (2 launches)**
 
 ```
-RENDER_TIMEOUT=900 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/pal 1 pixel_pal_asw,pixel_pal_kof,pixel_pal_dude,pixel_pal_edit
+RENDER_TIMEOUT=900 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/pal 1 pixel_pal_asw,pixel_pal_kof,pixel_pal_dude,pixel_pal_edit,pixel_pal_asw_bias
 PIXEL_LINES_DEBUG=1 RENDER_TIMEOUT=900 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/pal_marker 1 pixel_pal_asw,pixel_pal_kof
 ```
 
 - `palette_check.py build/pixelart/P/pal/<setup>/frame_0001.png build/pixelart/P/pal/<setup>/palette_<coll>.json`
   for the 4 setups: exit 0, foreign colours 0, colours <= 40.
 - `pixel_pal_edit`: the frame holds (255, 0, 0) pixels (count > 0).
+- `pixel_pal_asw_bias`: palette_check exit 0; zone-boundary pair count lower than `pixel_pal_asw` (both quoted).
 - `line_check.py --marker` on the 2 marker frames: total 0, outside 0.
 - A 4x zoom sheet of asw / kof / dude, read by you.
 

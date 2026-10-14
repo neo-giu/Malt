@@ -24,7 +24,7 @@ CARDS = [
     ('T02', 'zones', 'zones.py: zones, ramps and the palette (pure Python)', 2, 1, 'T01', 'M',
      'Malt/PixelArt/zones.py, tests/pixelart/test_zones.py, Malt/PixelArt/presets.py, '
      'BlenderMalt/PixelArtConvert.py (the preset loop skip line only), tests/pixelart/test_pixel_cel_ref.py',
-     ['`pytest tests/pixelart -q` -> all pass (zones 11 new)',
+     ['`pytest tests/pixelart -q` -> all pass (zones 14 new)',
       'plan Step 6 command on APRL_baseX.png -> the printed clusters / merged line quoted'],
      'No Blender launch in this card.'),
     ('T03', 'palette-glsl', 'Pixel Cel palette shading', 3, 2, 'T02', 'M',
@@ -42,6 +42,7 @@ CARDS = [
      ['palette_check on pixel_pal_asw, pixel_pal_kof, pixel_pal_dude, pixel_pal_edit -> exit 0, foreign colours 0, '
       'colours <= 40 (each quoted)',
       'pixel_pal_edit frame holds (255, 0, 0) px (count quoted)',
+      'pixel_pal_asw_bias: palette_check exit 0, zone-boundary pairs lower than pixel_pal_asw (both quoted)',
       'marker launch: line_check --marker on pixel_pal_asw and pixel_pal_kof -> total 0, outside 0',
       'zoom sheet of asw / kof / dude read by you'],
      ''),
