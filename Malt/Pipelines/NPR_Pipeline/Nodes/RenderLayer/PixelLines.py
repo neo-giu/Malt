@@ -68,9 +68,10 @@ class PixelLines(PipelineNode):
         self.t_dummy_depth = Texture(lattice, GL_DEPTH_COMPONENT32F)
         self.t_dummy_id = Texture(lattice, GL_R16UI, min_filter=GL_NEAREST, mag_filter=GL_NEAREST)
 
-    def thin_and_prune(self, thin, prune):
+    def thin_and_prune(self, thin, prune, line_data):
         # lines[0] -> thin -> lines[1] -> prune -> lines[0]
         thin.textures['lines'] = self.t_lines[0]
+        thin.textures['line_data'] = line_data
         self.pipeline.draw_screen_pass(thin, self.fbo_lines[1])
         prune.textures['lines'] = self.t_lines[1]
         self.pipeline.draw_screen_pass(prune, self.fbo_lines[0])
@@ -115,20 +116,22 @@ class PixelLines(PipelineNode):
         thin = _shader(self.pipeline, 'PIXEL_LINES_THIN')
         prune = _shader(self.pipeline, 'PIXEL_LINES_PRUNE')
         zs = _shader(self.pipeline, 'PIXEL_LINES_ZS')
-        self.thin_and_prune(thin, prune)
+        self.thin_and_prune(thin, prune, inputs['Pixel Line Data'])
         # Thin the 2 px wide runs (Zhang-Suen), then drop the L steps and short pieces again
         for _ in range(3):
             for sub in range(2):
                 zs.textures['lines'] = self.t_lines[sub]
+                zs.textures['line_data'] = inputs['Pixel Line Data']
                 zs.uniforms['zs_sub'].set_value(sub)
                 self.pipeline.draw_screen_pass(zs, self.fbo_lines[1 - sub])
         # Break the 2x2 blocks left at line junctions, one block corner per pass (lines[0] -> 1 -> 0 -> 1 -> 0)
         block = _shader(self.pipeline, 'PIXEL_LINES_BLOCK')
         for corner in range(4):
             block.textures['lines'] = self.t_lines[corner % 2]
+            block.textures['line_data'] = inputs['Pixel Line Data']
             block.uniforms['block_corner'].set_value(corner)
             self.pipeline.draw_screen_pass(block, self.fbo_lines[1 - corner % 2])
-        self.thin_and_prune(thin, prune)
+        self.thin_and_prune(thin, prune, inputs['Pixel Line Data'])
 
         # 5. Composite
         # PIXEL_LINES_DEBUG=1 (test renders only): outline px magenta, inner line px cyan, for tools/pixelart/line_check.py --marker

@@ -144,6 +144,9 @@ void face_sdf(
     @outline_from_base: default=false;
     @outline_value: default=0.1;
     @outline_shadow_only: default=false;
+    @keep_junctions: default=false;
+    @keep_tips: default=false;
+    @keep_overlap_corners: default=false;
     @unlit: default=false;
     @light_group: default=1;
     @shadows: default=true;
@@ -160,6 +163,7 @@ void pixel_cel_face_sdf(
     bool pitch_levels, float above_angle, float below_angle,
     bool use_object_axes, vec3 head_forward, vec3 head_up,
     bool outline_from_base, float outline_value, bool outline_shadow_only,
+    bool keep_junctions, bool keep_tips, bool keep_overlap_corners,
     bool unlit, int light_group, bool shadows, bool self_shadows,
     out vec4 color, out vec4 line_color, out vec4 line_data, out int tone, out bool shadowed)
 {
@@ -175,7 +179,8 @@ void pixel_cel_face_sdf(
         : base.rgb * tint;
 
     line_color = vec4(outline_from_base ? base.rgb * outline_value : vec3(outline_value), 1.0);
-    line_data = vec4(1.0, 1.0, 0.0, 1.0);
+    float rule_bits = float((1) | (keep_junctions ? 2 : 0) | (keep_tips ? 4 : 0) | (keep_overlap_corners ? 8 : 0));
+    line_data = vec4(1.0, rule_bits, 0.0, 1.0);
     shadowed = false;
 
     if(unlit)

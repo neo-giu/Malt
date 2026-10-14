@@ -30,7 +30,7 @@ layout (location = 0) out vec4 OUT_RESULT;
 #ifdef PIXEL_LINES_DECIDE
 uniform usampler2D lattice_id;          // (2W+1, 2H+1)
 uniform sampler2D lattice_normal_depth; // (2W+1, 2H+1), depth in .w
-uniform sampler2D line_data;            // (W, H): x = inner line value, y = outline enable
+uniform sampler2D line_data;            // (W, H): x = inner line value, y = rule bits: outline 1, junctions 2, tips 4, overlap corners 8
 uniform float depth_threshold;
 
 bool _covered(uvec4 id) { return id.x != 0u; }
@@ -132,7 +132,7 @@ void main()
             // ASW Col.A switch: no outline here. Only where a material wrote line_data (w > 0): a KEEP sliver with no
             // source pixel nearby has none, and still gets its outline
             vec4 ld = texelFetch(line_data, fn, 0);
-            if(ld.w > 0.25 && ld.y < 0.5) continue;
+            if(ld.w > 0.25 && (int(round(ld.y)) & 1) == 0) continue;
             // a KEEP neighbour's source can be 3 px from p: the encoding holds -2..2, so clamp (same object nearby)
             OUT_RESULT = vec4(1.0, vec2(clamp(fn - p, ivec2(-2), ivec2(2)) + 2) / 4.0,
                 keep_n ? PIXEL_LINES_KEEP : PIXEL_LINES_SILHOUETTE);
@@ -152,7 +152,7 @@ void main()
         bool centre_nearer = centre_covered && (!q_covered || centre_depth <= q_depth);
         ivec2 f = centre_nearer ? p : p + offsets[k];
         if(any(lessThan(f, ivec2(0))) || any(greaterThanEqual(f, size))) continue;
-        if(texelFetch(line_data, f, 0).y < 0.5) continue;   // ASW Col.A switch: no outline here
+        if((int(round(texelFetch(line_data, f, 0).y)) & 1) == 0) continue;   // ASW Col.A switch: no outline here
         OUT_RESULT = vec4(1.0, vec2(f - p + 2) / 4.0, PIXEL_LINES_OVERLAP);
         return;
     }
@@ -180,6 +180,7 @@ void main()
 uniform sampler2D lines;
 uniform int zs_sub;
 uniform int block_corner;
+uniform sampler2D line_data;            // rule bits in .y (see PIXEL_LINES_DECIDE)
 
 bool _line(ivec2 q)
 {
@@ -207,6 +208,84 @@ bool _surface(ivec2 q)
     return v.a > 0.1 && !_IS_RING(v);
 }
 
+
+// Corner rules A-C: bits of line_data.y at the fill pixel of q (outline 1, junctions 2, tips 4, overlap corners 8)
+int _rules(ivec2 q)
+{
+    ivec2 size = textureSize(lines, 0);
+    if(any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, size))) return 0;
+    ivec2 f = q + ivec2(round(texelFetch(lines, q, 0).gb * 4.0)) - 2;
+    if(any(lessThan(f, ivec2(0))) || any(greaterThanEqual(f, size))) return 0;
+    return int(round(texelFetch(line_data, f, 0).y));
+}
+
+// no model here: outside the frame, uncovered, or a removed ring pixel
+bool _background(ivec2 q)
+{
+    ivec2 size = textureSize(lines, 0);
+    if(any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, size))) return true;
+    vec4 v = texelFetch(lines, q, 0);
+    return v.r < 0.5 && (v.a < 0.1 || _IS_RING(v));
+}
+
+int _kind_class(vec4 v)
+{
+    return _IS_RING(v) ? 0 : (v.a > 0.95 ? 1 : 2);   // ring, overlap, inner
+}
+
+// An L corner (one vertical and one horizontal line neighbour, no diagonal) that rule B (pointed tip: 5+ of 8 neighbours
+// are background) or rule C (an overlap pixel, or it joins two different kinds) keeps.
+bool _kept_corner(ivec2 p, vec4 value)
+{
+    bool up = _line(p + ivec2(0, 1)), dn = _line(p + ivec2(0, -1));
+    bool lf = _line(p + ivec2(-1, 0)), rt = _line(p + ivec2(1, 0));
+    bool diag = _line(p + ivec2(-1, -1)) || _line(p + ivec2(1, -1)) || _line(p + ivec2(-1, 1)) || _line(p + ivec2(1, 1));
+    if(!((up != dn) && (lf != rt) && !diag)) return false;
+    int rules = _rules(p);
+    if((rules & 4) != 0)
+    {
+        int far = 0;
+        for(int y = -1; y <= 1; y++)
+            for(int x = -1; x <= 1; x++)
+                if((x != 0 || y != 0) && _background(p + ivec2(x, y))) far++;
+        if(far >= 5) return true;
+    }
+    if((rules & 8) != 0)
+    {
+        int own = _kind_class(value);
+        int vertical = _kind_class(texelFetch(lines, p + ivec2(0, up ? 1 : -1), 0));
+        int horizontal = _kind_class(texelFetch(lines, p + ivec2(lf ? -1 : 1, 0), 0));
+        if(own == 1 || vertical != horizontal) return true;
+    }
+    return false;
+}
+
+// Rule A: the 2x2 block at o holds a junction when 3+ separate line runs meet on its 12 pixel ring. A block inside a 3x3
+// all-line square is never a junction (its ring is mostly one run).
+bool _junction_block(ivec2 o)
+{
+    for(int sy = -1; sy <= 1; sy++)
+        for(int sx = -1; sx <= 1; sx++)
+        {
+            bool square = true;
+            for(int y = 0; y < 3 && square; y++)
+                for(int x = 0; x < 3 && square; x++)
+                    square = _line(o + ivec2(sx + x, sy + y));
+            if(square) return false;
+        }
+    ivec2 ring[12] = ivec2[12](ivec2(-1, -1), ivec2(0, -1), ivec2(1, -1), ivec2(2, -1), ivec2(2, 0), ivec2(2, 1),
+        ivec2(2, 2), ivec2(1, 2), ivec2(0, 2), ivec2(-1, 2), ivec2(-1, 1), ivec2(-1, 0));
+    int runs = 0;
+    bool previous = _line(o + ring[11]);
+    for(int i = 0; i < 12; i++)
+    {
+        bool current = _line(o + ring[i]);
+        if(current && !previous) runs++;
+        previous = current;
+    }
+    return runs >= 3;
+}
+
 void main()
 {
     ivec2 p = ivec2(gl_FragCoord.xy);
@@ -219,7 +298,7 @@ void main()
         bool lf = _line(p + ivec2(-1, 0)), rt = _line(p + ivec2(1, 0));
         bool diag = _line(p + ivec2(-1, -1)) || _line(p + ivec2(1, -1)) || _line(p + ivec2(-1, 1)) || _line(p + ivec2(1, 1));
         int ortho = int(up) + int(dn) + int(lf) + int(rt);
-        if((up != dn) && (lf != rt) && ortho == 2 && !diag)
+        if((up != dn) && (lf != rt) && ortho == 2 && !diag && !_kept_corner(p, value))
         {
             OUT_RESULT.r = 0.0;
         }
@@ -242,7 +321,7 @@ void main()
         bool keep = zs_sub == 0
             ? (!(n[0] && n[2] && n[4]) && !(n[2] && n[4] && n[6]))
             : (!(n[0] && n[2] && n[6]) && !(n[0] && n[4] && n[6]));
-        if(b >= 2 && b <= 6 && a == 1 && keep)
+        if(b >= 2 && b <= 6 && a == 1 && keep && !_kept_corner(p, value))
         {
             OUT_RESULT.r = 0.0;
         }
@@ -265,7 +344,8 @@ void main()
         int yokoi = 0;
         for(int k = 0; k < 8; k += 2)
             yokoi += empty[k] - empty[k] * empty[(k + 1) % 8] * empty[(k + 2) % 8];
-        if(block && b >= 2 && yokoi == 1)
+        // rule A: a junction spot (3+ line runs on the ring of the block) stays
+        if(block && b >= 2 && yokoi == 1 && !((_rules(p) & 2) != 0 && _junction_block(o)))
         {
             OUT_RESULT.r = 0.0;
         }
@@ -323,7 +403,7 @@ void main()
     }
     #ifdef PIXEL_LINES_DEBUG
     {
-        OUT_RESULT = _IS_KEEP(l) ? vec4(1, 1, 0, 1) : (l.a > 0.75 ? vec4(1, 0, 1, 1) : vec4(0, 1, 1, 1));
+        OUT_RESULT = _IS_KEEP(l) ? vec4(1, 1, 0, 1) : (l.a > 0.95 ? vec4(1, 0.5, 0, 1) : (l.a > 0.75 ? vec4(1, 0, 1, 1) : vec4(0, 1, 1, 1)));
         return;
     }
     #endif

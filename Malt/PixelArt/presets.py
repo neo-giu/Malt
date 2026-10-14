@@ -17,6 +17,9 @@ PRESETS = {
         'outline_from_base': False,
         'outline_value': 0.01,
         'outline_shadow_only': False,
+        'keep_junctions': True,
+        'keep_tips': True,
+        'keep_overlap_corners': True,
     },
     'KOF XIII': {
         'use_ramp': True,
@@ -34,5 +37,8 @@ PRESETS = {
         'outline_value': 0.1,
         # KOF XIII: lit edges keep their colour, the outline only on the darkest tone
         'outline_shadow_only': True,
+        'keep_junctions': True,
+        'keep_tips': True,
+        'keep_overlap_corners': True,
     },
 }

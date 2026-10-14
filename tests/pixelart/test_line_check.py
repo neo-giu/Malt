@@ -84,3 +84,40 @@ def test_l_corner_beside_surface_is_a_needed_corner():
                      '#....'])
     assert line_violations(mask)['l_corners'] == 1
     assert line_violations(mask, surface=surface)['l_corners'] == 0
+
+
+def _kinds(rows):
+    # 's' silhouette, 'o' overlap, 'i' inner, '.' none -> (mask, kinds array of single chars)
+    k = np.array([list(r) for r in rows])
+    return k != '.', k
+
+
+def test_junction_block_allowed_with_rule_a():
+    mask, kinds = _kinds(['..s..',
+                          '..s..',
+                          'ssss.',
+                          '..ss.',
+                          '..s..'])
+    assert line_violations(mask)['blocks'] == 1
+    assert line_violations(mask, kinds=kinds, rules=('junctions',))['blocks'] == 0
+
+
+def test_tip_corner_allowed_with_rule_b():
+    # an L corner whose 8-neighbourhood is mostly background (a pointed tip)
+    mask, kinds = _kinds(['.....',
+                          '.ss..',
+                          '.s...',
+                          '.s...'])
+    background = ~mask
+    assert line_violations(mask)['l_corners'] == 1
+    assert line_violations(mask, kinds=kinds, rules=('tips',), background=background)['l_corners'] == 0
+
+
+def test_overlap_corner_allowed_with_rule_c():
+    mask, kinds = _kinds(['.....',
+                          '.oo..',
+                          '.s...',
+                          '.s...'])
+    assert line_violations(mask, kinds=kinds, rules=('overlap_corners',))['l_corners'] == 0
+    _, plain = _kinds(['.....', '.ss..', '.s...', '.s...'])
+    assert line_violations(mask, kinds=plain, rules=('overlap_corners',))['l_corners'] == 1

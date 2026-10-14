@@ -295,6 +295,8 @@ def _same(a, b):
 def update_tree(tree, plan, preset):
     # Rebuild into a scratch tree, then copy each value whose current value is still the one the converter wrote
     old = json.loads(tree.get('pixel_cel_set', '{}'))
+    # Pick up inputs the library gained since the tree was built (new parameters start at their defaults)
+    tree.reload_nodes()
     scratch = build_tree(plan, preset, tree.name + ' (scratch)')
     new = json.loads(scratch['pixel_cel_set'])
     kept = []
@@ -322,6 +324,7 @@ def update_tree(tree, plan, preset):
     new.update(kept_values)
     tree['pixel_cel_set'] = json.dumps(new)
     bpy.data.node_groups.remove(scratch)
+    tree.update_ext(force_track_shader_changes=False, force_update=True)
     return kept
 
 

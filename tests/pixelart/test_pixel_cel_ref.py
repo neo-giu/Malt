@@ -65,3 +65,4 @@ def test_presets_have_the_same_inputs_and_no_line_width():
     assert asw['use_ramp'] is False and kof['use_ramp'] is True
     assert asw['ramp_stops'] == [] and len(kof['ramp_stops']) == 3
     assert asw['outline_shadow_only'] is False and kof['outline_shadow_only'] is True
+    assert asw['keep_tips'] and kof['keep_tips']

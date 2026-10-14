@@ -701,3 +701,21 @@ def pixel_keep(scene, keep=True):
 
 def pixel_keep_off(scene):
     pixel_keep(scene, False)
+
+
+# --- Corner rules A-C (Pixel Cel plan, task 1b) ------------------------------------------------------------------------
+# The converter reloads old trees (update_tree), so trees built before the keep_* inputs existed get them.
+
+def pixel_rules_on(scene):
+    pixel_cel_both_styles(scene)
+
+
+def pixel_rules_off(scene):
+    pixel_rules_on(scene)
+    for tree in bpy.data.node_groups:
+        for node in getattr(tree, 'nodes', []):
+            if node.bl_idname == 'MaltFunctionNode' and 'pixel_cel' in str(node.function_type):
+                for key in ('keep_junctions', 'keep_tips', 'keep_overlap_corners'):
+                    if key in node.inputs:
+                        ref = node.inputs[key].get_source_global_reference().replace('"', '')
+                        tree.malt_parameters.bools[ref].boolean = False
