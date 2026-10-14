@@ -104,6 +104,7 @@ int _pixel_cel_tone(float n_dot_l, float n_dot_h, float offset, float threshold,
     @highlight_mix: default=0.0;
     @outline_from_base: default=false;
     @outline_value: default=0.1;
+    @outline_shadow_only: default=false;
     @unlit: default=false;
     @light_group: default=1;
     @shadows: default=true;
@@ -119,7 +120,7 @@ void pixel_cel(
     float threshold, bool use_ramp, sampler1D ramp,
     float spec_threshold, float spec_boost,
     float highlight_threshold, vec3 highlight_color, float highlight_mix,
-    bool outline_from_base, float outline_value,
+    bool outline_from_base, float outline_value, bool outline_shadow_only,
     bool unlit, int light_group, bool shadows, bool self_shadows,
     out vec4 color, out vec4 line_color, out vec4 line_data, out int tone, out bool shadowed)
 {
@@ -145,6 +146,7 @@ void pixel_cel(
     {
         color = base;
         tone = PIXEL_CEL_TONE_LIT;
+        line_data.z = outline_shadow_only ? 1.0 : 0.0;
         return;
     }
 
@@ -179,6 +181,8 @@ void pixel_cel(
         ? mix(base.rgb * spec_boost, highlight_color, highlight_mix)
         : mix(shadow_color, base.rgb, best_t);
     color = vec4(rgb, base.a);
+    // KOF XIII: the outline keeps the pixel's own colour unless the pixel is in the darkest tone (PixelLines composite)
+    line_data.z = (outline_shadow_only && tone != PIXEL_CEL_TONE_SHADOW) ? 1.0 : 0.0;
 }
 
 /*  META

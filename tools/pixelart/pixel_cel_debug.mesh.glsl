@@ -26,7 +26,7 @@ void MAIN_PASS_PIXEL_SHADER()
             0.5, false, DEBUG_RAMP,
             0.5, 1.3,
             2.0, vec3(1.0, 0.97, 0.9), 0.0,
-            false, 0.1,
+            false, 0.1, false,
             false, 1, true, true,
             color, line_color, line_data, tone, shadowed);
         float s = 0.0;

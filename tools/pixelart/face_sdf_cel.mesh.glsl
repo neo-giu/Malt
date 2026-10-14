@@ -29,7 +29,7 @@ void MAIN_PASS_PIXEL_SHADER()
             pixel_cel_face_sdf(vec4(1), false, NO_TEXTURE, false, NO_TEXTURE, 0, false,
                 vec3(0.55, 0.5, 0.7), false, 15.0, 1.25, 0.55,
                 face_sdf_texture, face_sdf_flip_texture, true, 45.0, 45.0, true, vec3(0, -1, 0), vec3(0, 0, 1),
-                false, 0.1, false, 1, true, false,
+                false, 0.1, false, false, 1, true, false,
                 color, line_color, line_data, tone, shadowed);
         }
         #else

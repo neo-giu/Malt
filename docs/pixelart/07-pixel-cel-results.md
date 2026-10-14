@@ -75,3 +75,16 @@ Only `outline_value` changed (0.35 -> 0.1, reason above). Ramp stops, hue shift 
 - 3 animation frames for criteria 2 and 5b.
 - Frame-time pair for criterion 6.
 - KOF XIII tuning against KOF XIII sprites: after the owner review.
+
+## Outline ring and KOF lit edges (owner review 1, 2026-10-10)
+Owner: model pixels sat outside the outline (where thinning removed a line pixel, the surface behind stayed), and the
+KOF XIII copy drew outlines on lit areas.
+- Silhouette outline = the outermost ring of covered pixels. A removed ring pixel becomes background, and only when no
+  surface pixel would then touch the background with a side. A pixel the lattice sees uncovered is background (hair-tip
+  slivers the main pass covers but the lattice centre misses).
+- KOF XIII: `outline_shadow_only` (Pixel Cel and Pixel Cel Face SDF): an outline pixel that is not in the darkest
+  tone keeps its own colour.
+- New check: `line_check.py --marker` also counts `outside` (covered, not a line, a side on the background); exit 1 if > 0.
+- Before: outside 70 (both styles), 45 (April). After (`build/pixelart/P/ring_marker2/`): both styles 3012 line px,
+  April 1541, border 1907, all with total 0 and outside 0. compare_cel 0 mismatches. Face SDF l120 0.29 % (unchanged).
+- Also fixed: `Col` was not named for Malt, so COLOR[0] was 0 and the ASW offset -0.5 put every pixel in shadow.

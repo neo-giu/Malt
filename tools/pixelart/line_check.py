@@ -22,6 +22,13 @@ def marker_mask(image):
     return magenta | cyan
 
 
+def outside_pixels(image, lines):
+    # covered pixels that are not lines and touch the background with a side (model outside the outline)
+    covered = np.asarray(image)[..., 3] > 0
+    n = _neighbours(~covered)
+    return covered & ~lines & (n['up'] | n['dn'] | n['lf'] | n['rt'])
+
+
 def _neighbours(mask):
     p = np.pad(mask, 1)
     return {
@@ -65,12 +72,15 @@ def line_violations(mask):
 
 if __name__ == '__main__':
     from PIL import Image
+    outside = 0
     if sys.argv[1] == '--marker':
-        mask = marker_mask(np.array(Image.open(sys.argv[2]).convert('RGB')))
+        image = np.array(Image.open(sys.argv[2]).convert('RGBA'))
+        mask = marker_mask(image)
+        outside = int(outside_pixels(image, mask).sum())
     else:
         with_lines = np.array(Image.open(sys.argv[1]).convert('RGB'))
         without_lines = np.array(Image.open(sys.argv[2]).convert('RGB'))
         mask = line_mask(with_lines, without_lines)
     result = line_violations(mask)
-    print('line px', int(mask.sum()), result)
-    sys.exit(1 if result['total'] > 0 else 0)
+    print('line px', int(mask.sum()), result, 'outside', outside)
+    sys.exit(1 if result['total'] > 0 or outside > 0 else 0)

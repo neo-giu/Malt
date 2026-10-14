@@ -13,6 +13,15 @@ void main()
 
 layout (location = 0) out vec4 OUT_RESULT;
 
+// lines texture: r = line, gb = fill pixel offset, a = kind. A removed line keeps its kind with r = 0: a removed
+// silhouette pixel becomes background, a removed inner or overlap line shows its surface.
+#define PIXEL_LINES_BACKGROUND 0.0
+#define PIXEL_LINES_SURFACE 0.25
+#define PIXEL_LINES_INNER 0.5
+#define PIXEL_LINES_SILHOUETTE 0.875
+#define PIXEL_LINES_OVERLAP 1.0
+#define _IS_SILHOUETTE(v) (abs((v).a - PIXEL_LINES_SILHOUETTE) < 0.05)
+
 #ifdef PIXEL_LINES_DECIDE
 uniform usampler2D lattice_id;          // (2W+1, 2H+1)
 uniform sampler2D lattice_normal_depth; // (2W+1, 2H+1), depth in .w
@@ -44,22 +53,39 @@ void main()
     ivec2 size = textureSize(line_data, 0);
     ivec2 c = 2 * p + 1;
     ivec2 offsets[4] = ivec2[4](ivec2(0, 1), ivec2(0, -1), ivec2(-1, 0), ivec2(1, 0));
-    OUT_RESULT = vec4(0.0, 1.0 / 2.0, 1.0 / 2.0, 0.0);
-
-    // Outline: the 5 diamond samples disagree. F = the nearer covered side.
     float centre_depth = _distance(c);
     bool centre_covered = _covered(texelFetch(lattice_id, c, 0));
+    OUT_RESULT = vec4(0.0, 1.0 / 2.0, 1.0 / 2.0, centre_covered ? PIXEL_LINES_SURFACE : PIXEL_LINES_BACKGROUND);
+
+    // Silhouette: the outermost ring of covered pixels (a covered pixel with an uncovered 4-neighbour), so no model
+    // pixel is ever outside the outline
+    if(centre_covered && texelFetch(line_data, p, 0).y >= 0.5)   // ASW Col.A switch: no outline here
+    {
+        for(int k = 0; k < 4; k++)
+        {
+            ivec2 n = p + offsets[k];
+            if(any(lessThan(n, ivec2(0))) || any(greaterThanEqual(n, size))) continue;
+            if(!_covered(texelFetch(lattice_id, 2 * n + 1, 0)))
+            {
+                OUT_RESULT = vec4(1.0, 0.5, 0.5, PIXEL_LINES_SILHOUETTE);
+                return;
+            }
+        }
+    }
+
+    // Overlap: two covered samples of the diamond disagree (another part, or a depth step). F = the nearer side.
     for(int k = 0; k < 4; k++)
     {
         ivec2 q = c + offsets[k];
         if(!_disagree(c, q)) continue;
         bool q_covered = _covered(texelFetch(lattice_id, q, 0));
+        if(!centre_covered || !q_covered) continue;   // silhouette edges: handled above
         float q_depth = _distance(q);
         bool centre_nearer = centre_covered && (!q_covered || centre_depth <= q_depth);
         ivec2 f = centre_nearer ? p : p + offsets[k];
         if(any(lessThan(f, ivec2(0))) || any(greaterThanEqual(f, size))) continue;
         if(texelFetch(line_data, f, 0).y < 0.5) continue;   // ASW Col.A switch: no outline here
-        OUT_RESULT = vec4(1.0, vec2(f - p + 1) / 2.0, 1.0);
+        OUT_RESULT = vec4(1.0, vec2(f - p + 1) / 2.0, PIXEL_LINES_OVERLAP);
         return;
     }
 
@@ -76,7 +102,7 @@ void main()
         bool minimum = horizontal_rise ? (v <= l && v < r) : (v <= d && v < u);
         if(minimum)
         {
-            OUT_RESULT = vec4(1.0, 0.5, 0.5, 0.5);
+            OUT_RESULT = vec4(1.0, 0.5, 0.5, PIXEL_LINES_INNER);
         }
     }
 }
@@ -101,6 +127,15 @@ int _n8(ivec2 q)
         for(int x = -1; x <= 1; x++)
             if((x != 0 || y != 0) && _line(q + ivec2(x, y))) n++;
     return n;
+}
+
+bool _surface(ivec2 q)
+{
+    // a covered pixel that is not a line (a removed silhouette pixel is background)
+    ivec2 size = textureSize(lines, 0);
+    if(any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, size))) return false;
+    vec4 v = texelFetch(lines, q, 0);
+    return v.r < 0.5 && v.a > 0.1 && !_IS_SILHOUETTE(v);
 }
 
 void main()
@@ -183,6 +218,13 @@ void main()
         }
     }
     #endif
+    // A removed silhouette pixel becomes background: allowed only when no surface pixel would then touch the
+    // background with a side (nothing of the model outside the outline)
+    if(OUT_RESULT.r < 0.5 && _IS_SILHOUETTE(value) &&
+       (_surface(p + ivec2(0, 1)) || _surface(p + ivec2(0, -1)) || _surface(p + ivec2(-1, 0)) || _surface(p + ivec2(1, 0))))
+    {
+        OUT_RESULT = value;
+    }
 }
 #endif //PIXEL_LINES_THIN || PIXEL_LINES_PRUNE || PIXEL_LINES_ZS || PIXEL_LINES_BLOCK
 
@@ -198,7 +240,13 @@ void main()
     vec4 color = texelFetch(color_texture, p, 0);
     vec4 l = texelFetch(lines, p, 0);
     OUT_RESULT = color;
-    if(l.r < 0.5) return;
+    if(l.r < 0.5)
+    {
+        // A removed silhouette pixel is background. So is a pixel the lattice sees uncovered: a sliver the main pass
+        // covers but the lattice centre misses would sit outside the outline.
+        if(_IS_SILHOUETTE(l) || l.a < 0.1) OUT_RESULT = vec4(0.0);
+        return;
+    }
     #ifdef PIXEL_LINES_DEBUG
     {
         OUT_RESULT = l.a > 0.75 ? vec4(1, 0, 1, 1) : vec4(0, 1, 1, 1);
@@ -208,7 +256,10 @@ void main()
     if(l.a > 0.75)
     {
         ivec2 f = p + ivec2(round(l.gb * 2.0)) - 1;
-        OUT_RESULT = vec4(texelFetch(line_color_texture, f, 0).rgb, 1.0);
+        // KOF XIII: an outline on a pixel that is not in the darkest tone keeps its own colour (line_data.z)
+        OUT_RESULT = texelFetch(line_data, f, 0).z > 0.5
+            ? vec4(color.rgb, 1.0)
+            : vec4(texelFetch(line_color_texture, f, 0).rgb, 1.0);
     }
     else
     {

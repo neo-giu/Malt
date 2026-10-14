@@ -53,3 +53,11 @@ def test_marker_mask_is_magenta_and_cyan_only():
     a[0, 1] = (0, 255, 255)
     a[0, 2] = (255, 0, 254)
     assert marker_mask(a).tolist() == [[True, True, False, False]]
+
+
+def test_outside_pixels_are_model_pixels_beside_the_background():
+    from line_check import outside_pixels
+    image = np.zeros((1, 4, 4), dtype=np.uint8)
+    image[0, 1:, 3] = 255                      # covered: x 1, 2, 3
+    lines = np.array([[False, False, True, False]])
+    assert outside_pixels(image, lines).tolist() == [[False, True, False, False]]

@@ -143,6 +143,7 @@ void face_sdf(
     @head_up: default=vec3(0.0, 0.0, 1.0);
     @outline_from_base: default=false;
     @outline_value: default=0.1;
+    @outline_shadow_only: default=false;
     @unlit: default=false;
     @light_group: default=1;
     @shadows: default=true;
@@ -158,7 +159,7 @@ void pixel_cel_face_sdf(
     sampler2D sdf_texture, sampler2D flip_texture,
     bool pitch_levels, float above_angle, float below_angle,
     bool use_object_axes, vec3 head_forward, vec3 head_up,
-    bool outline_from_base, float outline_value,
+    bool outline_from_base, float outline_value, bool outline_shadow_only,
     bool unlit, int light_group, bool shadows, bool self_shadows,
     out vec4 color, out vec4 line_color, out vec4 line_data, out int tone, out bool shadowed)
 {
@@ -181,6 +182,7 @@ void pixel_cel_face_sdf(
     {
         color = base;
         tone = PIXEL_CEL_TONE_LIT;
+        line_data.z = outline_shadow_only ? 1.0 : 0.0;
         return;
     }
 
@@ -191,6 +193,8 @@ void pixel_cel_face_sdf(
         lit, shadowed, horizontal_angle, elevation);
     tone = lit ? PIXEL_CEL_TONE_LIT : PIXEL_CEL_TONE_SHADOW;
     color = vec4(lit ? base.rgb : shadow_color, base.a);
+    // KOF XIII: the outline keeps the pixel's own colour unless the pixel is in shadow (PixelLines composite)
+    line_data.z = (outline_shadow_only && lit) ? 1.0 : 0.0;
 }
 
 #endif //FACE_SDF_GLSL
