@@ -1,7 +1,7 @@
 # T02 — zones.py: zones, ramps and the palette (pure Python)
 
 Requirements: the spec sections named in plan Task 2
-Wave: 1           Depends on: T01
+Wave: 1           Depends on: T01b
 Size: M
 
 ## Goal

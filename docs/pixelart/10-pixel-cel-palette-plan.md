@@ -5,7 +5,8 @@
 > In this repo the tasks run as cards: `docs/specs/pixelpal/tasks/` (RULES.md applies).
 
 **Goal:** Converted characters render only colours from one owner-editable palette (texture picks the ramp, cel shading
-picks the slot), KOF XIII follows the Kim line rules, and thin parts (fingers) never vanish (KEEP).
+picks the slot), KOF XIII follows the Kim line rules, thin parts (fingers) never vanish (KEEP), and lines keep the
+three corner exceptions artists use (junction spots, tips, overlap corners).
 
 **Architecture:** A pure-Python module `Malt/PixelArt/zones.py` clusters each base texture in Oklab into zones, groups
 zones into ramps and writes the palette (JSON text + PNG strip + a GPU palette image). Pixel Cel gets palette inputs
@@ -22,7 +23,8 @@ the owner on 2026-10-14 after the outline-ring fix made April's fingers disappea
 
 ## Global Constraints
 
-- Every line is exactly 1 px; no line width input; Col.A only switches the outline on or off.
+- Every line is exactly 1 px; no line width input; Col.A only switches the outline on or off. Only exceptions: the
+  corner rules A-C of Task 1b (owner, 2026-10-14), each a per-material switch.
 - Nothing of the model outside the outline: `line_check.py --marker` must report `outside 0`.
 - No post-pass filter on colours. Zones are cleaned on the texture (island merge), never on the frame.
 - Never save or modify `.blend` files from tests; render from `H:/GameDev/Pixelizer/content/malt/` copies, in memory.
@@ -51,13 +53,13 @@ the owner on 2026-10-14 after the outline-ring fix made April's fingers disappea
 | File | Responsibility | Task |
 |---|---|---|
 | `Malt/Pipelines/NPR_Pipeline/Shaders/NPR_Pipeline/PixelCel.glsl` | KEEP id function; palette inputs | 1, 3 |
-| `Malt/Shaders/Passes/PixelLines.glsl` | KEEP coverage and protection; L2 far-side rule; palette inner lines | 1, 3, 5 |
+| `Malt/Shaders/Passes/PixelLines.glsl` | KEEP coverage and protection; corner rules A-C; L2 far-side rule; palette inner lines | 1, 1b, 3, 5 |
 | `Malt/PixelArt/detect.py` | `keep_by_name` | 1 |
 | `Malt/PixelArt/zones.py` (new) | Oklab k-means, island merge, ramps, palette JSON/PNG/GPU arrays | 2 |
 | `Malt/PixelArt/cel_ref.py` | `palette_slot` reference | 3 |
 | `Malt/PixelArt/presets.py` | palette slots and stops per preset | 2, 5 |
 | `BlenderMalt/PixelArtConvert.py` | KEEP wiring; palette build and wiring per collection | 1, 4 |
-| `tools/pixelart/line_check.py` | KEEP marker colour, KEEP exemption | 1 |
+| `tools/pixelart/line_check.py` | KEEP marker colour, KEEP exemption; corner rules | 1, 1b |
 | `tools/pixelart/palette_check.py` (new) | frame colours ⊆ palette | 4 |
 | `tools/pixelart/scenes.py` | setups (append only) | 1, 4, 5 |
 | `tests/pixelart/test_zones.py` (new), `test_pixel_cel_detect.py`, `test_line_check.py`, `test_pixel_cel_ref.py` | tests | 1-3 |
@@ -294,6 +296,133 @@ Append the numbers to `docs/pixelart/07-pixel-cel-results.md` ("KEEP" section, m
 git add Malt BlenderMalt tools tests docs/pixelart/07-pixel-cel-results.md docs/specs/pixelpal/mechanics
 git commit -m "Pixel Lines: KEEP parts (hands, fingers, straps) never vanish: conservative coverage from the pre-pass KEEP bit"
 ```
+
+---
+
+### Task 1b: Corner rules A, B, C (junction spots, tips, overlap corners)
+
+Owner decision 2026-10-14 ("ABC is enough"), from the sprite analysis of 21 ASW / KOF XIII sprites
+(`docs/pixelart/11-sprite-lines-report.txt`, tool `tools/pixelart/sprite_lines.py`): artists keep a 2x2 spot where 3+
+lines meet, keep the corner pixel at pointed silhouette tips, and keep L corners where an overlap line meets another
+line. Everything else stays strictly 1 px. Each rule is a per-material switch; both presets turn all three on.
+
+**Files:**
+- Modify: `Malt/Pipelines/NPR_Pipeline/Shaders/NPR_Pipeline/PixelCel.glsl`, `.../FaceSDF.glsl` (line_data.y bits only)
+- Modify: `Malt/Shaders/Passes/PixelLines.glsl`, `Malt/Pipelines/NPR_Pipeline/Nodes/RenderLayer/PixelLines.py`
+  (bind `line_data` to the THIN / BLOCK passes)
+- Modify: `Malt/PixelArt/presets.py`, `tests/pixelart/test_pixel_cel_ref.py` (preset keys)
+- Modify: `tools/pixelart/line_check.py`, `tests/pixelart/test_line_check.py`
+- Modify: `tools/pixelart/pixel_cel_debug.mesh.glsl`, `tools/pixelart/face_sdf_cel.mesh.glsl` (call arguments)
+- Modify: `tools/pixelart/scenes.py` (append), `docs/pixelart/07-pixel-cel-results.md`
+
+**Interfaces:**
+- Produces: Pixel Cel / Pixel Cel Face SDF inputs `keep_junctions`, `keep_tips`, `keep_overlap_corners` (bool,
+  default false); `line_data.y` = bit field `outline (1) | junctions (2) | tips (4) | overlap corners (8)` as a float
+  (decode `int(round(y))`; outline off = bit 0 clear); marker colours: silhouette magenta (255, 0, 255), overlap
+  orange (255, 128, 0), inner cyan, KEEP yellow;
+  `line_check.line_violations(mask, exempt=None, kinds=None, rules=(), background=None)`.
+- Consumes: kinds, `_IS_RING`, the THIN and BLOCK stages (Task 1).
+
+- [ ] **Step 1: Failing tests (`tests/pixelart/test_line_check.py`, append)**
+
+```python
+def _kinds(rows):
+    # 's' silhouette, 'o' overlap, 'i' inner, '.' none -> (mask, kinds array of single chars)
+    k = np.array([list(r) for r in rows])
+    return k != '.', k
+
+
+def test_junction_block_allowed_with_rule_a():
+    mask, kinds = _kinds(['..s..',
+                          '..s..',
+                          'ssss.',
+                          '..ss.',
+                          '..s..'])
+    assert line_violations(mask)['blocks'] == 1
+    assert line_violations(mask, kinds=kinds, rules=('junctions',))['blocks'] == 0
+
+
+def test_tip_corner_allowed_with_rule_b():
+    # an L corner whose 8-neighbourhood is mostly background (a pointed tip)
+    mask, kinds = _kinds(['.....',
+                          '.ss..',
+                          '.s...',
+                          '.s...'])
+    background = ~mask
+    assert line_violations(mask)['l_corners'] == 1
+    assert line_violations(mask, kinds=kinds, rules=('tips',), background=background)['l_corners'] == 0
+
+
+def test_overlap_corner_allowed_with_rule_c():
+    mask, kinds = _kinds(['.....',
+                          '.oo..',
+                          '.s...',
+                          '.s...'])
+    assert line_violations(mask, kinds=kinds, rules=('overlap_corners',))['l_corners'] == 0
+    _, plain = _kinds(['.....', '.ss..', '.s...', '.s...'])
+    assert line_violations(mask, kinds=plain, rules=('overlap_corners',))['l_corners'] == 1
+```
+
+Run `pytest tests/pixelart/test_line_check.py -q`: FAIL with `TypeError: ... unexpected keyword argument 'kinds'`.
+
+- [ ] **Step 2: line_check rules**
+
+`line_violations(mask, exempt=None, kinds=None, rules=(), background=None)`:
+- `junctions`: a 2x2 block is allowed when the 12-pixel ring around it holds 3 or more separate line runs (the same
+  count as `sprite_lines.classify_blocks`); a 3x3 all-line square is never allowed.
+- `tips`: an L corner is allowed when 5 or more of its 8 neighbours are `background` (the CLI passes the frame's
+  transparent pixels; without `background` the rule allows nothing).
+- `overlap_corners`: an L corner is allowed when its own kind is `'o'` or its two line neighbours have different kinds.
+
+The CLI `--marker` path builds `kinds` from the marker colours ('s' magenta, 'o' orange, 'i' cyan, 'k' yellow),
+`background` from alpha 0, and takes `--rules junctions,tips,overlap_corners` (default: none, so old checks keep their
+meaning). Run Step 1 again: pass.
+
+- [ ] **Step 3: Presets** — both presets get `'keep_junctions': True, 'keep_tips': True, 'keep_overlap_corners': True`;
+extend `test_presets_have_the_same_inputs_and_no_line_width` with `assert asw['keep_tips'] and kof['keep_tips']`.
+
+- [ ] **Step 4: Pixel Cel bits (PixelCel.glsl, FaceSDF.glsl)** — META defaults `false` for the three inputs, new
+parameters after `bool outline_shadow_only,`: `bool keep_junctions, bool keep_tips, bool keep_overlap_corners,`. Where
+`line_data` is first set, replace the `.y` value `(use_vertex_color && vertex_color.a < 0.5) ? 0.0 : 1.0` with
+
+```glsl
+float(((use_vertex_color && vertex_color.a < 0.5) ? 0 : 1) | (keep_junctions ? 2 : 0) | (keep_tips ? 4 : 0)
+      | (keep_overlap_corners ? 8 : 0))
+```
+
+(FaceSDF: `1 | ...` with the same three bits.) In PixelLines.glsl DECIDE, every `texelFetch(line_data, x, 0).y < 0.5`
+outline test becomes `(int(round(texelFetch(line_data, x, 0).y)) & 1) == 0`. Update the two test shader calls.
+
+- [ ] **Step 5: Pixel Lines stages (PixelLines.glsl, PixelLines.py)** — the THIN and BLOCK passes get
+`uniform sampler2D line_data;` (bind `inputs['Pixel Line Data']` in `thin_and_prune` and the block loop) and a helper
+`int _rules(ivec2 q)` = the bits of `line_data` at the fill pixel of q (`q + offset(gb)`, as the composite computes F),
+0 outside the frame.
+- THIN: before removing an L corner at p, keep it when `(_rules(p) & 4) != 0` and 5+ of its 8 neighbours are
+  background (not a line and kind BACKGROUND, or a removed ring pixel) — rule B; or when `(_rules(p) & 8) != 0` and
+  (p is an overlap pixel, or its two line neighbours have different kinds: ring vs overlap vs inner) — rule C.
+- BLOCK: before removing p from a 2x2 block, keep it when `(_rules(p) & 2) != 0` and the 12-pixel ring around that
+  block holds 3+ separate line runs — rule A. A 3x3 all-line square is still broken (its ring is all line: 1 run).
+- DEBUG composite: silhouette magenta, overlap `(1, 0.5, 0, 1)` (orange), inner cyan, KEEP yellow.
+
+- [ ] **Step 6: Setups and verify (2 launches)**
+
+`scenes.py`, append `pixel_rules_off(scene)` = `pixel_cel_both_styles(scene)` followed by setting the three `keep_*`
+parameters to False on every converted tree (`tree.malt_parameters.bools[key].boolean = False`, key from
+`get_source_global_reference()` of each input).
+
+```
+PIXEL_LINES_DEBUG=1 RENDER_TIMEOUT=600 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/rules_marker 1 pixel_cel_both_styles,pixel_rules_off,pixel_keep,pixel_lines_border
+RENDER_TIMEOUT=600 bash tools/pixelart/render.sh /h/GameDev/Pixelizer/content/malt/testmalt.blend build/pixelart/P/rules 1 pixel_cel_both_styles,pixel_cel_debug
+```
+
+- `line_check.py --marker FRAME --rules junctions,tips,overlap_corners` on all 4 marker frames: total 0, outside 0.
+- `line_check.py --marker` (no rules) on `pixel_rules_off`: total 0 (rules off = Task 1 behaviour).
+- On `pixel_cel_both_styles`, print how many blocks / L corners each rule kept (A, B, C counts, from line_check with
+  and without each rule), also per 100 line px; quote them next to the sprite numbers (ASW 1.4-7.4 spots and 0.6-1.6
+  L corners per 100 line px). Expected: inside or below those ranges.
+- compare_cel 0 mismatches. A 6x zoom of the face + hands, rules on vs off, read by you.
+
+- [ ] **Step 7: Commit** — `git commit -m "Pixel Lines: corner rules A (junction spots), B (tips), C (overlap corners), per material"`
 
 ---
 

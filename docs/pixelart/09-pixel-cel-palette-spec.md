@@ -72,6 +72,10 @@ Palette on:
   of the edge) is in its darkest slot. Needs the far side's slot: Pixel Line Data carries the slot, the decision reads
   it on the far sample's pixel.
 - Pixel-perfect and all section 3.2 rules unchanged; ASW keeps outlines everywhere (near black, Col.A switch).
+- Corner exceptions (owner, 2026-10-14, from the sprite analysis `11-sprite-lines-report.txt`), per-material
+  switches, on in both presets: (A) keep the 2x2 spot where 3+ lines meet, (B) keep the corner pixel at a pointed
+  silhouette tip, (C) keep an L corner where an overlap line meets another line. No other width variation.
+- KEEP parts (hands, fingers, gloves, straps) never vanish: conservative coverage (Pixelizer `keep.py`).
 
 ## 7. Tests
 

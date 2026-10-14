@@ -9,7 +9,7 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
 ## Waves
 | Wave | Cards | Goal |
 |---|---|---|
-| 1 | T01 KEEP, T02 zones.py | fingers never vanish; zones + palette in pure Python |
+| 1 | T01 KEEP, T01b corner rules A-C, T02 zones.py | fingers never vanish; junction spots, tips, overlap corners; zones + palette |
 | 2 | T03 palette GLSL, T04 converter + palette_check | April / Dude in palette colours only |
 | 3 | T05 KOF L2 + tuning + owner package | owner review |
 
@@ -19,4 +19,4 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
   Edit tool or a Python file, not inline escapes.
 
 ## Next
-- After the owner approves plan 10: `bash tools/cards/run_cards.sh T01 T02` (background).
+- After the owner approves plan 10: `bash tools/cards/run_cards.sh T01 T01b T02` (background).

@@ -21,7 +21,20 @@ CARDS = [
      'Malt facts: the pre pass writes PPO.id = ID (uvec4; ID.x = object id, 16 bit hash; ID.y/z/w = custom ids) into '
      'the lattice texture t_lattice_id (GL_RGBA16UI) of PixelLines.py; the converter adds a pre pass output node with '
      '_pre_pass_node(tree). the April hands material is 5_hands_1_0_0.001.'),
-    ('T02', 'zones', 'zones.py: zones, ramps and the palette (pure Python)', 2, 1, 'T01', 'M',
+    ('T01b', 'corners', 'Corner rules A, B, C (junction spots, tips, overlap corners)', '1b', 1, 'T01', 'M',
+     'Malt/Pipelines/NPR_Pipeline/Shaders/NPR_Pipeline/PixelCel.glsl, '
+     'Malt/Pipelines/NPR_Pipeline/Shaders/NPR_Pipeline/FaceSDF.glsl (line_data.y bits only), '
+     'Malt/Shaders/Passes/PixelLines.glsl, Malt/Pipelines/NPR_Pipeline/Nodes/RenderLayer/PixelLines.py, '
+     'Malt/PixelArt/presets.py, tests/pixelart/test_pixel_cel_ref.py, tools/pixelart/line_check.py, '
+     'tests/pixelart/test_line_check.py, tools/pixelart/pixel_cel_debug.mesh.glsl, tools/pixelart/face_sdf_cel.mesh.glsl, '
+     'tools/pixelart/scenes.py (append only), docs/pixelart/07-pixel-cel-results.md',
+     ['`pytest tests/pixelart -q` -> all pass (line_check +3)',
+      "marker launch: line_check --marker --rules junctions,tips,overlap_corners on the 4 frames -> 'total': 0, outside 0",
+      "line_check --marker (no rules) on pixel_rules_off -> 'total': 0",
+      'kept counts per rule (A, B, C) and per 100 line px quoted next to the sprite ranges; compare_cel 0 mismatches',
+      'face + hands zoom, rules on vs off, read by you'],
+     'Sprite numbers: docs/pixelart/11-sprite-lines-report.txt (read the summary lines only).'),
+    ('T02', 'zones', 'zones.py: zones, ramps and the palette (pure Python)', 2, 1, 'T01b', 'M',
      'Malt/PixelArt/zones.py, tests/pixelart/test_zones.py, Malt/PixelArt/presets.py, '
      'BlenderMalt/PixelArtConvert.py (the preset loop skip line only), tests/pixelart/test_pixel_cel_ref.py',
      ['`pytest tests/pixelart -q` -> all pass (zones 14 new)',
