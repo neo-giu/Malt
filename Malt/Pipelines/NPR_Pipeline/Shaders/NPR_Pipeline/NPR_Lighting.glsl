@@ -130,6 +130,11 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             // Start on the smooth shadow surface (Phong tessellated BVH), found along the geometric normal within
             // 8 px, then lifted onto the vertex-normal surface (shadow terminator)
             vec3 surface = ray_smooth_origin(position, geometric_normal, 8.0 * pixel_size, id);
+            // Where the real geometry already faces away from the light but the shading normal does not (smooth or
+            // custom normals), a ray hits the object's own neighbour facets and the shadow edge follows each facet.
+            // There the object does not shadow itself: the normal (the ramp) decides. Other objects still shadow.
+            vec3 outward = dot(geometric_normal, normal) < 0.0 ? -geometric_normal : geometric_normal;
+            bool ray_self_shadows = self_shadows && dot(outward, S.L) >= 0.0;
             if(dot(geometric_normal, S.L) < 0.0)
             {
                 geometric_normal = -geometric_normal;
@@ -149,7 +154,7 @@ LitSurface npr_lit_surface(vec3 position, vec3 normal, uint id, Light light, int
             int light_group = LIGHT_GROUP_INDEX(light_index);
             uint light_group_bit = (light_group >= 0 && light_group < 32) ? (1u << uint(light_group)) : 0u;
             float ray_dir_length = length(ray_dir);
-            S.shadow = ray_occluded(ray_origin, ray_dir, ray_t_max, id, self_shadows, light_group_bit,
+            S.shadow = ray_occluded(ray_origin, ray_dir, ray_t_max, id, ray_self_shadows, light_group_bit,
                 RAY_BIAS_PX * pixel_size / max(ray_dir_length, 1e-20));
         }
         else

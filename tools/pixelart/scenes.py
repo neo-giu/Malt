@@ -803,3 +803,38 @@ def pixel_pal_asw_bias(scene):
 def pixel_pal_kof_l2(scene):
     # same scene as pixel_pal_kof; the L2 overlap rule lives in PixelLines.glsl (tools/pixelart/l2_check.py)
     pixel_pal_kof(scene)
+
+
+# --- Shadow terminator on April's face (owner review 2026-10-14) ------------------------------------------------------
+# KOF palette, camera on head + neck at 360 px; only the smooth shadow geometry level changes.
+
+def _kof_face(scene, smooth_levels):
+    pixel_pal_kof(scene)
+    face = [o for o in _collection_objects('GGXRD') if o.name.startswith(('5_head', '5_neck'))]
+    _frame_objects(scene, face, 360)
+    _set_node_input(scene, 'Ray Smooth Levels', smooth_levels)
+
+
+def kof_face_s0(scene):
+    _kof_face(scene, 0)
+
+
+def kof_face_s2(scene):
+    _kof_face(scene, 2)
+
+
+def kof_face_s3(scene):
+    _kof_face(scene, 3)
+
+
+def kof_face_noshadow(scene):
+    # ramp only: a huge bias makes every shadow ray miss
+    _kof_face(scene, 0)
+    _set_node_input(scene, 'Ray Bias (px)', 100000.0)
+
+
+def kof_face_debug(scene):
+    # R = smooth (custom) normal faces the light, G = ray says shadowed, B = own-triangle search (ray_debug.mesh.glsl)
+    _kof_face(scene, 0)
+    _use_pixel_lines(scene, False)
+    _debug_material(scene)
