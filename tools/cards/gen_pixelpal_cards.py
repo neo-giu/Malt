@@ -55,7 +55,7 @@ CARDS = [
      'tools/pixelart/pixel_cel_debug.mesh.glsl, tools/pixelart/face_sdf_cel.mesh.glsl',
      ['`pytest tests/pixelart -q` -> all pass',
       'launch pixel_cel_debug,face_sdf_l120,pixel_cel_both_styles -> EXIT 0; compare_cel 0 mismatches; '
-      'face_sdf_check 0.29 %; both_styles vs build/pixelart/P/ring/pixel_cel_both_styles/frame_0001.png -> 0 differing px'],
+      'face_sdf_check 0.29 %; both_styles vs build/pixelart/P/base_t03/frame_0001.png -> 0 differing px'],
      ''),
     ('T04', 'palette-convert', 'Converter builds and wires the palette; palette check', 4, 2, 'T03', 'M',
      'BlenderMalt/PixelArtConvert.py, tools/pixelart/scenes.py (append only), tools/pixelart/palette_check.py, '

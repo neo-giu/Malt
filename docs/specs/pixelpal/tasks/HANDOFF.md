@@ -3,6 +3,8 @@
 Rewritten by the orchestrator after every wave. A fresh orchestrator session reads this first.
 
 ## State
+- T03 palette GLSL done (423c4c9, committed by the orchestrator: the card's reference frame was stale; against a fresh
+  render base_t03 it is 0 differing px).
 - T02 zones.py done (a3f6b2b). Orchestrator fix b9aa83e: cluster seeds = dominant flat colours (April 8 zones, was 3).
 - T01b corner rules A-C done (a3281c2, orchestrator finished it after the worker hit the launch limit; 5338b1a check).
   rules_v1: rule A keeps 6/5/4 junction blocks, B 0, C 0; left: both styles 1 block (overlap/outline thick spot,
@@ -27,4 +29,4 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
   Edit tool or a Python file, not inline escapes.
 
 ## Next
-- Wave 2: `bash tools/cards/run_cards.sh T03 T04` (background), then wave 3 T05.
+- Wave 2 rest: `bash tools/cards/run_cards.sh T04` (background), then wave 3 T05.

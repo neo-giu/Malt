@@ -30,7 +30,7 @@ see it fail (quote the failing line), implement, see it pass, commit once.
 
 ## Done when
 - [ ] `pytest tests/pixelart -q` -> all pass
-- [ ] launch pixel_cel_debug,face_sdf_l120,pixel_cel_both_styles -> EXIT 0; compare_cel 0 mismatches; face_sdf_check 0.29 %; both_styles vs build/pixelart/P/ring/pixel_cel_both_styles/frame_0001.png -> 0 differing px
+- [ ] launch pixel_cel_debug,face_sdf_l120,pixel_cel_both_styles -> EXIT 0; compare_cel 0 mismatches; face_sdf_check 0.29 %; both_styles vs build/pixelart/P/base_t03/frame_0001.png -> 0 differing px
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`
 
 ## Report (last message, max 15 lines)
