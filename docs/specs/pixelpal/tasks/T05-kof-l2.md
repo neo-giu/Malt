@@ -31,7 +31,7 @@ At most 3 launches in total, tuning included. Do not copy files into H:/GameDev/
 
 ## Done when
 - [ ] l2_check -> 0 overlap line px over a lit far part
-- [ ] line_check --marker on pixel_pal_asw and pixel_pal_kof -> total 0, outside 0; palette_check exit 0 on both
+- [ ] line_check --marker FRAME --rules junctions,tips,overlap_corners on pixel_pal_asw and pixel_pal_kof -> total 0, outside 0; palette_check exit 0 on both
 - [ ] sheet docs/pixelart/img/pixel_pal_both.png exists; results note covers every spec 09 success criterion
 - [ ] fast checks pass: `H:/GameDev/Pixelizer/.venv/Scripts/python -m pytest tests/pixelart -q`
 

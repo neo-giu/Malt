@@ -3,6 +3,7 @@
 Rewritten by the orchestrator after every wave. A fresh orchestrator session reads this first.
 
 ## State
+- T04 converter palette done (d580a91; orchestrator: palette alpha 1). Dude mesh has no UV map: flat, use April/Kim.
 - T03 palette GLSL done (423c4c9, committed by the orchestrator: the card's reference frame was stale; against a fresh
   render base_t03 it is 0 differing px).
 - T02 zones.py done (a3f6b2b). Orchestrator fix b9aa83e: cluster seeds = dominant flat colours (April 8 zones, was 3).
@@ -29,4 +30,4 @@ Rewritten by the orchestrator after every wave. A fresh orchestrator session rea
   Edit tool or a Python file, not inline escapes.
 
 ## Next
-- Wave 2 rest: `bash tools/cards/run_cards.sh T04` (background), then wave 3 T05.
+- Wave 3: `bash tools/cards/run_cards.sh T05` (background), then the owner review package.
