@@ -44,6 +44,7 @@ void MAIN_PASS_PIXEL_SHADER()
                 false, 0.1, false,
                 false, false, false,
                 false, 1, true, true,
+                false, NO_TEXTURE, ivec2(1, 1), 1, 0.0, NO_TEXTURE,
                 color, line_color, ld, tone, shadowed);
         }
         #endif

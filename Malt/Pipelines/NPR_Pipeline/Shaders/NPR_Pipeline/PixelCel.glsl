@@ -43,9 +43,10 @@ vec3 _pixel_cel_shifted_shadow(vec3 base, float hue_shift, float saturation, flo
 
 int _pixel_cel_tone(float n_dot_l, float n_dot_h, float offset, float threshold, bool light_shadowed,
     bool use_ramp, sampler1D ramp, float spec_mask, float spec_size, float spec_threshold, float highlight_threshold,
-    out float t)
+    out float t, out float s_out)
 {
     float s = n_dot_l * 0.5 + 0.5 + offset;
+    s_out = s;
     t = 0.0;
     if(light_shadowed)
     {
@@ -76,6 +77,62 @@ int _pixel_cel_tone(float n_dot_l, float n_dot_h, float offset, float threshold,
         }
     }
     return tone;
+}
+
+int _pixel_cel_zone(sampler2D atlas, ivec2 size0, int levels, vec2 uv, float bias)
+{
+    // Level from the screen footprint of one pixel in level-0 texels (like GL's LOD), plus the material's bias.
+    // The atlas holds the majority-vote levels side by side (level l at x = sum of the widths below l), read exactly.
+    vec2 t = uv * vec2(size0);
+    #ifdef PIXEL_SHADER
+    float rho = max(length(dFdx(t)), length(dFdy(t)));
+    #else
+    float rho = 1.0;   // no derivatives outside the pixel stage
+    #endif
+    int level = clamp(int(floor(log2(max(rho, 1e-6)) + bias + 0.5)), 0, levels - 1);
+    int x0 = 0;
+    ivec2 size = size0;
+    for(int l = 0; l < level; l++)
+    {
+        x0 += size.x;
+        size = max((size + 1) / 2, ivec2(1));
+    }
+    ivec2 texel = clamp(ivec2(floor(fract(uv) * vec2(size))), ivec2(0), size - 1);
+    // numpy builds the atlas top-down with every level at the top (rows 0..h_l-1); Blender stores images bottom-up,
+    // so in GL rows level l spans size0.y - size.y .. size0.y - 1, and uv.y = 0 is the level's bottom row.
+    return int(round(texelFetch(atlas, ivec2(x0 + texel.x, size0.y - size.y + texel.y), 0).r * 255.0));
+}
+
+int _pixel_cel_slot(sampler2D palette, int row, float s, bool shadowed, bool highlight, out int n_slots)
+{
+    vec4 meta = texelFetch(palette, ivec2(0, 2 * row + 1), 0);
+    n_slots = int(round(meta.g * 255.0));
+    if(shadowed) return n_slots - 1;
+    if(highlight) return 0;
+    int slot = 0;
+    for(int i = 0; i < n_slots - 1; i++)
+    {
+        if(s < texelFetch(palette, ivec2(i, 2 * row + 1), 0).r) slot++;
+    }
+    return min(slot, n_slots - 1);
+}
+
+// Palette colours for the pixel's zone (spec 09 section 5). unlit: slot 1 (lit) of the ramp.
+void _pixel_cel_palette(sampler2D zone_texture, ivec2 zone_size, int zone_levels, float zone_lod_bias,
+    sampler2D palette, vec2 uv, bool unlit, float s, bool shadowed, bool highlight, bool outline_shadow_only,
+    inout vec4 color, inout vec4 line_color, inout vec4 line_data)
+{
+    int zone = _pixel_cel_zone(zone_texture, zone_size, zone_levels, uv, zone_lod_bias);
+    if(zone > 0)
+    {
+        int row = zone - 1, n_slots;
+        int slot = _pixel_cel_slot(palette, row, s, shadowed, highlight, n_slots);
+        if(unlit) slot = min(1, n_slots - 1);
+        color = vec4(texelFetch(palette, ivec2(slot, 2 * row), 0).rgb, color.a);
+        line_color = vec4(texelFetch(palette, ivec2(7, 2 * row), 0).rgb, 1.0);
+        line_data.z = outline_shadow_only ? (slot != n_slots - 1 ? 1.0 : 0.5) : 0.0;
+        line_data.w = 0.5;
+    }
 }
 
 /*  META
@@ -112,6 +169,10 @@ int _pixel_cel_tone(float n_dot_l, float n_dot_h, float offset, float threshold,
     @light_group: default=1;
     @shadows: default=true;
     @self_shadows: default=true;
+    @use_palette: default=false;
+    @zone_size: default=ivec2(1, 1);
+    @zone_levels: default=1;
+    @zone_lod_bias: default=0.0;
 */
 void pixel_cel(
     vec4 base_color, bool use_base_texture, sampler2D base_texture,
@@ -126,6 +187,7 @@ void pixel_cel(
     bool outline_from_base, float outline_value, bool outline_shadow_only,
     bool keep_junctions, bool keep_tips, bool keep_overlap_corners,
     bool unlit, int light_group, bool shadows, bool self_shadows,
+    bool use_palette, sampler2D zone_texture, ivec2 zone_size, int zone_levels, float zone_lod_bias, sampler2D palette,
     out vec4 color, out vec4 line_color, out vec4 line_data, out int tone, out bool shadowed)
 {
     vec2 uv = UV[uv_index];
@@ -153,11 +215,17 @@ void pixel_cel(
         color = base;
         tone = PIXEL_CEL_TONE_LIT;
         line_data.z = outline_shadow_only ? 1.0 : 0.0;
+        if(use_palette)
+        {
+            _pixel_cel_palette(zone_texture, zone_size, zone_levels, zone_lod_bias, palette, uv, true, 0.0, false,
+                false, outline_shadow_only, color, line_color, line_data);
+        }
         return;
     }
 
     tone = -1;
     float best_t = 0.0;
+    float best_s = 0.0;
     for(int i = 0; i < LIGHTS.lights_count; i++)
     {
         if(LIGHT_GROUP_INDEX(i) != light_group)
@@ -168,14 +236,15 @@ void pixel_cel(
         LitSurface LS = npr_lit_surface(POSITION, NORMAL, ID.x, L, i, shadows, self_shadows);
         bool light_shadowed = shadows && LS.shadow;
         shadowed = shadowed || light_shadowed;
-        float t;
+        float t, light_s;
         int light_tone = _pixel_cel_tone(LS.NoL, dot(NORMAL, LS.H), offset, threshold, light_shadowed,
             use_ramp, ramp, use_ilm_texture ? ilm.r : 0.0, use_ilm_texture ? ilm.b : 0.0, spec_threshold,
-            highlight_threshold, t);
+            highlight_threshold, t, light_s);
         if(light_tone > tone)
         {
             tone = light_tone;
             best_t = t;
+            best_s = light_s;
         }
     }
     if(tone < 0)
@@ -188,7 +257,13 @@ void pixel_cel(
         : mix(shadow_color, base.rgb, best_t);
     color = vec4(rgb, base.a);
     // KOF XIII: the outline keeps the pixel's own colour unless the pixel is in the darkest tone (PixelLines composite)
-    line_data.z = (outline_shadow_only && tone != PIXEL_CEL_TONE_SHADOW) ? 1.0 : 0.0;
+    line_data.z = outline_shadow_only ? (tone != PIXEL_CEL_TONE_SHADOW ? 1.0 : 0.5) : 0.0;
+    if(use_palette)
+    {
+        _pixel_cel_palette(zone_texture, zone_size, zone_levels, zone_lod_bias, palette, uv, false, best_s,
+            tone == PIXEL_CEL_TONE_SHADOW && shadowed, tone == PIXEL_CEL_TONE_HIGHLIGHT, outline_shadow_only,
+            color, line_color, line_data);
+    }
 }
 
 /*  META

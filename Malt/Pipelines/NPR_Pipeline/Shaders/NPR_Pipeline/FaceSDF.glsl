@@ -199,7 +199,7 @@ void pixel_cel_face_sdf(
     tone = lit ? PIXEL_CEL_TONE_LIT : PIXEL_CEL_TONE_SHADOW;
     color = vec4(lit ? base.rgb : shadow_color, base.a);
     // KOF XIII: the outline keeps the pixel's own colour unless the pixel is in shadow (PixelLines composite)
-    line_data.z = (outline_shadow_only && lit) ? 1.0 : 0.0;
+    line_data.z = outline_shadow_only ? (lit ? 1.0 : 0.5) : 0.0;
 }
 
 #endif //FACE_SDF_GLSL

@@ -410,13 +410,15 @@ void main()
     if(l.a > 0.75)
     {
         // KOF XIII: an outline on a pixel that is not in the darkest tone keeps its own colour (line_data.z)
-        OUT_RESULT = texelFetch(line_data, f, 0).z > 0.5
+        OUT_RESULT = texelFetch(line_data, f, 0).z > 0.75
             ? vec4(texelFetch(color_texture, f, 0).rgb, 1.0)
             : vec4(texelFetch(line_color_texture, f, 0).rgb, 1.0);
     }
     else
     {
-        OUT_RESULT = vec4(color.rgb * texelFetch(line_data, p, 0).x, color.a);
+        vec4 ld = texelFetch(line_data, p, 0);
+        OUT_RESULT = (ld.w > 0.0 && ld.w < 0.75) ? vec4(texelFetch(line_color_texture, p, 0).rgb, color.a)
+            : vec4(color.rgb * ld.x, color.a);
     }
 }
 #endif //PIXEL_LINES_COMPOSITE

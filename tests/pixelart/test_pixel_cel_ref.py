@@ -66,3 +66,17 @@ def test_presets_have_the_same_inputs_and_no_line_width():
     assert asw['ramp_stops'] == [] and len(kof['ramp_stops']) == 3
     assert asw['outline_shadow_only'] is False and kof['outline_shadow_only'] is True
     assert asw['keep_tips'] and kof['keep_tips']
+
+
+from Malt.PixelArt.cel_ref import palette_slot
+
+
+def test_palette_slot():
+    stops = [0.85, 0.5, 0.35, 0.2]                 # 5 slots, light -> dark
+    assert palette_slot(0.9, stops, 5, False, False) == 0
+    assert palette_slot(0.6, stops, 5, False, False) == 1
+    assert palette_slot(0.4, stops, 5, False, False) == 2
+    assert palette_slot(0.1, stops, 5, False, False) == 4
+    assert palette_slot(0.9, stops, 5, True, False) == 4      # shadowed: straight to the darkest slot
+    assert palette_slot(0.6, stops, 5, False, True) == 0      # specular highlight: slot 0
+    assert palette_slot(0.6, [0.5], 2, False, False) == 0 and palette_slot(0.4, [0.5], 2, False, False) == 1

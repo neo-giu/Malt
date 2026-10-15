@@ -58,3 +58,12 @@ def shifted_shadow(base_rgb, hue_shift_degrees, saturation, value):
     s = min(max(s * saturation, 0.0), 1.0)
     v = v * value
     return srgb_to_linear(colorsys.hsv_to_rgb(h, s, v))
+
+
+def palette_slot(s, stops, n_slots, shadowed, highlight):
+    # spec 09 section 5: slot 0 = lightest; shadowed -> darkest; stops descending
+    if shadowed:
+        return n_slots - 1
+    if highlight:
+        return 0
+    return min(sum(1 for stop in stops if s < stop), n_slots - 1)

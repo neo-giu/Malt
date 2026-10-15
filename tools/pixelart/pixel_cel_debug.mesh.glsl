@@ -29,6 +29,7 @@ void MAIN_PASS_PIXEL_SHADER()
             false, 0.1, false,
             false, false, false,
             false, 1, true, true,
+            false, DEBUG_TEXTURE, ivec2(1, 1), 1, 0.0, DEBUG_TEXTURE,
             color, line_color, line_data, tone, shadowed);
         float s = 0.0;
         for(int i = 0; i < LIGHTS.lights_count; i++)
