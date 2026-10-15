@@ -121,6 +121,12 @@ def line_violations(mask, exempt=None, surface=None, kinds=None, rules=(), backg
     block = mask[:-1, :-1] & mask[1:, :-1] & mask[:-1, 1:] & mask[1:, 1:]
     if 'junctions' in rules:
         block &= ~_junction_blocks(mask)
+    if surface is not None:
+        # a needed block: each of its 4 pixels touches a surface pixel (a 2 px notch or a 2 px gap between two parts);
+        # removing one would put the model beside the background
+        s4 = _neighbours(np.asarray(surface, dtype=bool))
+        touch = s4['up'] | s4['dn'] | s4['lf'] | s4['rt']
+        block &= ~(touch[:-1, :-1] & touch[1:, :-1] & touch[:-1, 1:] & touch[1:, 1:])
     blocks = int(block.sum())
     ortho = n['up'].astype(int) + n['dn'] + n['lf'] + n['rt']
     diag = n['ul'] | n['ur'] | n['dl'] | n['dr']

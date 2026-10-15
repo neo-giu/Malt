@@ -121,3 +121,16 @@ def test_overlap_corner_allowed_with_rule_c():
     assert line_violations(mask, kinds=kinds, rules=('overlap_corners',))['l_corners'] == 0
     _, plain = _kinds(['.....', '.ss..', '.s...', '.s...'])
     assert line_violations(mask, kinds=plain, rules=('overlap_corners',))['l_corners'] == 1
+
+
+def test_block_in_a_2px_notch_is_a_needed_block():
+    # a 2 px notch in the model, lined by the outside outline: each block pixel touches the model, so it stays (owner:
+    # fill only where background or an outline break would show)
+    mask = _mask(['..##..',
+                  '..##..',
+                  '......'])
+    surface = _mask(['##..##',
+                     '##..##',
+                     '######'])
+    assert line_violations(mask)['blocks'] == 1
+    assert line_violations(mask, surface=surface)['blocks'] == 0
