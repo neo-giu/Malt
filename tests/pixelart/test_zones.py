@@ -121,3 +121,14 @@ def test_mip_atlas_offsets():
     atlas, offsets = Z.mip_atlas(levels)
     assert offsets == [0, 4, 6] and atlas.shape == (4, 7)
     assert np.array_equal(atlas[:2, 4:6], levels[1])
+
+
+def test_cluster_texture_keeps_small_flat_colours_apart():
+    # April-like flat texture: a big skin area, a small hat yellow and a little white must stay 3 zones
+    a = np.zeros((100, 100, 4), np.uint8)
+    a[..., 3] = 255
+    a[:, :] = (250, 222, 172, 255)
+    a[:10, :60] = (218, 188, 110, 255)
+    a[90:, :30] = (254, 254, 254, 255)
+    labels, colours = Z.cluster_texture(a)
+    assert len(colours) == 3

@@ -60,14 +60,24 @@ def cluster_texture(rgba, k_max=8, seed=0, sample=20000):
     lab = srgb_to_oklab(rgb)
     rng = np.random.default_rng(seed)
     pts = lab[rng.choice(len(lab), min(sample, len(lab)), replace=False)]
-    # k: the smallest k whose inertia is under 15 % of k = 1 (elbow), at most k_max and the distinct colour count
-    k_limit = min(k_max, len(np.unique(rgb, axis=0)))
-    inertia1 = ((pts - pts.mean(0)) ** 2).sum()
-    centres, k = pts.mean(0)[None], 1
-    for k in range(1, k_limit + 1):
-        centres, l = kmeans(pts, k, seed)
-        if inertia1 == 0 or ((pts - centres[l]) ** 2).sum() <= 0.15 * inertia1:
+    # Zones = the dominant flat colours: Oklab cells (0.02) by area, each kept cell at least 0.5 % of the texels and
+    # 0.05 from the cells kept before it, at most k_max. Then Lloyd steps from those centres. (k-means++ by inertia
+    # follows the spread of the dark tones and merged April's hat yellow and white into the skin.)
+    cells, counts = np.unique(np.round(pts / 0.02).astype(int), axis=0, return_counts=True)
+    picked = []
+    for i in np.argsort(-counts, kind='stable'):
+        if counts[i] < 0.005 * len(pts) or len(picked) == k_max:
             break
+        c = cells[i] * 0.02
+        if all(((c - q) ** 2).sum() >= 0.05 ** 2 for q in picked):
+            picked.append(c)
+    centres = np.array(picked) if picked else pts.mean(0)[None]
+    for _ in range(20):
+        l = ((pts[:, None] - centres[None]) ** 2).sum(-1).argmin(1)
+        new = np.array([pts[l == i].mean(0) if np.any(l == i) else centres[i] for i in range(len(centres))])
+        if np.allclose(new, centres):
+            break
+        centres = new
     assign = ((lab[:, None] - centres[None]) ** 2).sum(-1).argmin(1)
     labels[opaque] = assign
     used = sorted(set(assign.tolist()))

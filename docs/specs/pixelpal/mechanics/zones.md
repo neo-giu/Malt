@@ -8,5 +8,6 @@ Differences from plan Task 2 as written:
 - The plain `python` on PATH is the Windows Store stub; use the Pixelizer venv python for scripts.
 
 Step 6 on APRL_baseX.png: `clusters 3 changed by merge 763`. The plan expected 4-8 clusters and a few hundred texels.
-3 clusters = the elbow rule (inertia under 15 % of k = 1) stops early on this texture (mean alpha 0.16). Not changed:
-the card fence has no tuning step. A tuning decision for the owner (elbow threshold in `cluster_texture`).
+3 clusters = the elbow rule (inertia under 15 % of k = 1) stopped early on this texture. Orchestrator fix: zones are
+now the dominant flat colours (Oklab 0.02 cells by area, each >= 0.5 % and >= 0.05 apart, at most k_max), then Lloyd
+steps. April: 8 zones (skin, blue, brown, cream, yellow, black, dark brown, white), 1392 texels changed by the merge.
