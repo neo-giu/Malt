@@ -128,7 +128,7 @@ void _pixel_cel_palette(sampler2D zone_texture, ivec2 zone_size, int zone_levels
         int row = zone - 1, n_slots;
         int slot = _pixel_cel_slot(palette, row, s, shadowed, highlight, n_slots);
         if(unlit) slot = min(1, n_slots - 1);
-        color = vec4(texelFetch(palette, ivec2(slot, 2 * row), 0).rgb, color.a);
+        color = vec4(texelFetch(palette, ivec2(slot, 2 * row), 0).rgb, 1.0);   // opaque: texture alpha would brighten the un-premultiplied PNG
         line_color = vec4(texelFetch(palette, ivec2(7, 2 * row), 0).rgb, 1.0);
         line_data.z = outline_shadow_only ? (slot != n_slots - 1 ? 1.0 : 0.5) : 0.0;
         line_data.w = 0.5;

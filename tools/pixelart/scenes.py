@@ -719,3 +719,82 @@ def pixel_rules_off(scene):
                     if key in node.inputs:
                         ref = node.inputs[key].get_source_global_reference().replace('"', '')
                         tree.malt_parameters.bools[ref].boolean = False
+
+
+# --- Palette (Pixel Cel palette plan, task 4) --------------------------------------------------------------------------
+
+def pixel_pal_asw(scene):
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _setup_malt_ids()
+    from BlenderMalt import PixelArtConvert
+    PixelArtConvert.convert_objects(april, 'ASW')
+    _use_pixel_lines(scene, True)
+    _dump_palette('GGXRD')
+
+
+def _dump_palette(collection):
+    import os
+    text = bpy.data.texts[f'PixelCel Palette {collection}']
+    path = os.path.join(os.environ.get('RENDER_OUT', '.'), f'palette_{collection}.json')
+    with open(path, 'w') as f:
+        f.write(text.as_string())
+    print('PALETTE_FILE', path, flush=True)
+
+
+def pixel_pal_kof(scene):
+    ray_traced(scene)
+    april = _collection_objects('GGXRD')
+    _solo(scene, april)
+    _frame_objects(scene, april, 256)
+    _setup_malt_ids()
+    from BlenderMalt import PixelArtConvert
+    PixelArtConvert.convert_objects(april, 'KOF XIII')
+    _use_pixel_lines(scene, True)
+    _dump_palette('GGXRD')
+
+
+def pixel_pal_dude(scene):
+    ray_traced(scene)
+    dude = _collection_objects('Dudemodel')
+    _solo(scene, dude)
+    _frame_objects(scene, dude, 256)
+    _setup_malt_ids()
+    from BlenderMalt import PixelArtConvert
+    PixelArtConvert.convert_objects(dude, 'ASW')
+    _use_pixel_lines(scene, True)
+    _dump_palette('Dudemodel')
+
+
+def pixel_pal_edit(scene):
+    # owner edit round trip: convert, paint the first strip pixel red, reconvert, the render must show it
+    pixel_pal_asw(scene)
+    import numpy as np
+    from BlenderMalt import PixelArtConvert
+    strip = bpy.data.images['PixelCel Palette GGXRD']
+    px = np.empty(len(strip.pixels), np.float32)
+    strip.pixels.foreach_get(px)
+    w, h = strip.size
+    px.reshape(h, w, 4)[h - 1, 0, :3] = (1.0, 0.0, 0.0)    # top row, first slot
+    strip.pixels.foreach_set(px)
+    PixelArtConvert.convert_objects(_collection_objects('GGXRD'), 'ASW')
+    _dump_palette('GGXRD')
+
+
+def pixel_pal_asw_bias(scene):
+    # same as pixel_pal_asw with Zone LOD Bias +2 on every converted tree
+    pixel_pal_asw(scene)
+    count = 0
+    for tree in bpy.data.node_groups:
+        if tree.bl_idname != 'MaltTree' or 'pixel_cel_set' not in tree.keys():
+            continue
+        cel = next(n for n in tree.nodes if getattr(n, 'function_type', '').endswith('pixel_cel'))
+        key = cel.inputs['zone_lod_bias'].get_source_global_reference().replace('"', '')
+        tree.malt_parameters[key] = 2.0
+        for material in bpy.data.materials:
+            if material.malt.shader_nodes is tree and key in material.malt_parameters.keys():
+                material.malt_parameters[key] = 2.0
+        count += 1
+    print('ZONE_BIAS_SET trees', count, flush=True)

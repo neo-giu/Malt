@@ -45,6 +45,7 @@ def _log(out_dir):
 
 def setup_one(setup, out_dir):
     os.makedirs(out_dir, exist_ok=True)
+    os.environ['RENDER_OUT'] = out_dir
     with open(os.path.join(out_dir, "log.txt"), "w") as log:
         try:
             import Malt

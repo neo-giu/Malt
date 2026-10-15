@@ -6,7 +6,10 @@ import json
 import os
 
 import bpy
+import numpy as np
 
+from Malt.PixelArt.cel_ref import linear_to_srgb
+from Malt.PixelArt import zones as Z
 from Malt.PixelArt.detect import detect, keep_by_name
 from Malt.PixelArt.presets import PRESETS
 
@@ -141,6 +144,101 @@ def _set_ramp(tree, node, stops, written):
         element = ramp.elements.new(position)
         element.color = (value,) * 3 + (1.0,)
     written[key] = [list(s) for s in stops]
+
+
+def _image_rgba(image):
+    w, h = image.size
+    px = np.empty(w * h * 4, np.float32)
+    image.pixels.foreach_get(px)
+    # Blender pixels are bottom-up floats in the image's colour space: flip to top-down uint8 (sRGB bytes)
+    return np.flipud(np.rint(px.reshape(h, w, 4) * 255).astype(np.uint8))
+
+
+def _new_image(name, array, non_color=True, float_buffer=False, top_down=True):
+    # array: uint8 (bytes / 255) or float (used as is). Blender stores images bottom-up: top_down=False writes array row 0
+    # at GL row 0 (what texelFetch(image, ivec2(x, 0)) reads)
+    h, w = array.shape[:2]
+    rgba = np.zeros((h, w, 4), np.float32)
+    data = array if array.ndim == 3 else array[..., None]
+    rgba[..., :data.shape[2]] = data / 255.0 if array.dtype == np.uint8 else data
+    rgba[..., 3] = 1.0
+    image = bpy.data.images.get(name)
+    if image is not None and image.is_float != float_buffer:
+        bpy.data.images.remove(image)
+        image = None
+    image = image or bpy.data.images.new(name, w, h, alpha=True, float_buffer=float_buffer)
+    if tuple(image.size) != (w, h):
+        image.scale(w, h)
+    image.colorspace_settings.name = 'Non-Color' if non_color else 'sRGB'
+    image.pixels.foreach_set((np.flipud(rgba) if top_down else rgba).ravel())
+    image.pack()
+    return image
+
+
+def _gpu_palette_array(palette):
+    # Colour rows (even) hold linear values: the output transform encodes them back to the palette's sRGB bytes.
+    # Stop rows (odd) stay raw (stop * 255 / 255, slot count / 255).
+    g = Z.gpu_palette(palette).astype(np.float32) / 255.0
+    rgb = g[0::2, :, :3]
+    g[0::2, :, :3] = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    return g
+
+
+def build_collection_palette(objects, preset, budget=40):
+    plans, zones, labels = {}, [], {}
+    for obj in objects:
+        for slot in obj.material_slots:
+            m = slot.material
+            if m is None or m.name in plans:
+                continue
+            plan = detect(describe_material(m))
+            plans[m.name] = plan
+            base = plan.textures.get('base') or plan.textures.get('decal')
+            image = _load_image(base) if base else None
+            if image is None:
+                zones.append(Z.Zone(m.name, 0, tuple(int(round(c * 255)) for c in linear_to_srgb(plan.base_color[:3])), None, 1))
+                labels[m.name] = None
+                continue
+            rgba = _image_rgba(image)
+            lab, centres = Z.cluster_texture(rgba)
+            lab = Z.merge_islands(lab)
+            sss_img = _load_image(plan.textures['sss']) if 'sss' in plan.textures else None
+            sss = _image_rgba(sss_img)[..., :3] if sss_img is not None else None
+            for c in range(len(centres)):
+                sel = lab == c
+                if not sel.any():
+                    continue
+                rgb = tuple(int(v) for v in np.rint(rgba[..., :3][sel].mean(0)))
+                s = tuple(int(v) for v in np.rint(sss[sel].mean(0))) if sss is not None and sss.shape[:2] == lab.shape else None
+                zones.append(Z.Zone(m.name, c, rgb, s, int(sel.sum())))
+            labels[m.name] = lab
+    collection = objects[0].users_collection[0].name if objects else 'scene'
+    text_name = f'PixelCel Palette {collection}'
+    palette = Z.build_palette(preset, zones, budget)
+    old = bpy.data.texts.get(text_name)
+    strip_image = bpy.data.images.get(text_name)
+    if old is not None and strip_image is not None:
+        # reconvert: owner edits in the strip (Aseprite) win over the generated colours
+        saved = json.loads(old.as_string())
+        if saved.get('preset') == preset and list(saved['ramps']) == list(palette['ramps']):
+            palette = Z.apply_strip(saved, _image_rgba(strip_image)[..., :3])
+    text = old or bpy.data.texts.new(text_name)
+    text.from_string(json.dumps(palette, indent=1))
+    images = {'strip': _new_image(text_name, Z.palette_strip(palette), non_color=False),
+              'gpu': _new_image(f'PixelCel GPU Palette {collection}', _gpu_palette_array(palette), float_buffer=True,
+                                top_down=False)}
+    for name, lab in labels.items():
+        if lab is None:
+            t = np.full((1, 1), 1 + list(palette['ramps']).index(palette['zone_ramp'][f'{name}/0']), np.uint8)
+        else:
+            t = Z.ramp_index_texture(lab, name, palette)
+        atlas, _ = Z.mip_atlas(Z.zone_mips(t))
+        images[name] = _new_image(f'PixelCel Zones {name}', atlas)
+        images[name]['zone_size'] = [int(t.shape[1]), int(t.shape[0])]
+        images[name]['zone_levels'] = len(Z.zone_mips(t))
+    ramps = len(palette['ramps'])
+    print('PALETTE_REPORT', ramps, sum(len(r['colours']) + 1 for r in palette['ramps'].values()), flush=True)
+    return palette, images
 
 
 def build_tree(plan, preset, name):
@@ -324,17 +422,38 @@ def update_tree(tree, plan, preset):
             params[key] = value
     kept_values = {k: old[k] for k in kept}
     new.update(kept_values)
+    for key in old:
+        new.setdefault(key, old[key])   # inputs written by other steps (palette) keep their record
     tree['pixel_cel_set'] = json.dumps(new)
     bpy.data.node_groups.remove(scratch)
     tree.update_ext(force_track_shader_changes=False, force_update=True)
     return kept
 
 
-def convert_material(material, preset='ASW', trees=None, object_names=()):
+def _set_palette(tree, images, material_name):
+    # Palette inputs of the converted tree. A value the owner changed by hand (differs from what was written) stays.
+    cel = next(n for n in tree.nodes if getattr(n, 'function_type', '') == find_function(tree, 'pixel_cel'))
+    old = json.loads(tree.get('pixel_cel_set', '{}'))
+    zone = images[material_name]
+    values = (('use_palette', True), ('palette', images['gpu']), ('zone_texture', zone),
+              ('zone_size', tuple(int(v) for v in zone['zone_size'])), ('zone_levels', int(zone['zone_levels'])),
+              ('zone_lod_bias', 0.0))
+    for socket_name, value in values:
+        key = cel.inputs[socket_name].get_source_global_reference().replace('"', '')
+        if key in old and not _same(_current(tree, key), old[key]):
+            continue
+        written = {}
+        _set(tree, cel, socket_name, value, written)
+        old.update(written)
+    tree['pixel_cel_set'] = json.dumps(old)
+    tree.update_ext(force_track_shader_changes=False, force_update=True)
+
+
+def convert_material(material, preset='ASW', trees=None, object_names=(), images=None):
     plan = detect(describe_material(material))
     plan.keep = keep_by_name(material.name, list(object_names))
     trees = {} if trees is None else trees
-    key = plan.key + '|' + preset + ('|keep' if plan.keep else '')
+    key = plan.key + '|' + preset + ('|keep' if plan.keep else '') + ('|' + material.name if images else '')
     if key not in trees:
         existing = material.malt.shader_nodes
         if (existing is not None and existing.get('pixel_cel_preset') == preset and existing.get('pixel_cel_key') == plan.key
@@ -346,10 +465,13 @@ def convert_material(material, preset='ASW', trees=None, object_names=()):
             trees[key]['pixel_cel_key'] = plan.key
     material.malt.material_type = 'Mesh'
     material.malt.shader_nodes = trees[key]
+    if images:
+        _set_palette(trees[key], images, material.name)
     return plan, trees[key]
 
 
-def convert_objects(objects, preset='ASW'):
+def convert_objects(objects, preset='ASW', palette=True):
+    palette_data, images = build_collection_palette(objects, preset) if palette else (None, None)
     trees = {}
     report = []
     done = set()
@@ -364,7 +486,7 @@ def convert_objects(objects, preset='ASW'):
             if material is None or material.name in done:
                 continue
             done.add(material.name)
-            plan, tree = convert_material(material, preset, trees, users[material.name])
+            plan, tree = convert_material(material, preset, trees, users[material.name], images)
             report.append((material.name, plan.style, sorted(plan.textures),
                            plan.warnings + (['keep'] if plan.keep else []), tree.name))
         # Malt uploads a vertex colour only when the mesh names it (Malt Vertex Colors); without it COLOR[0] is 0,
