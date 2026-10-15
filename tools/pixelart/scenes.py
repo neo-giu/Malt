@@ -798,3 +798,8 @@ def pixel_pal_asw_bias(scene):
                 material.malt_parameters[key] = 2.0
         count += 1
     print('ZONE_BIAS_SET trees', count, flush=True)
+
+
+def pixel_pal_kof_l2(scene):
+    # same scene as pixel_pal_kof; the L2 overlap rule lives in PixelLines.glsl (tools/pixelart/l2_check.py)
+    pixel_pal_kof(scene)

@@ -108,3 +108,20 @@ pixel (4-neighbour) is outline, coloured from that neighbour. The fill is never 
 - Marker checks (`build/pixelart/P/out_marker3`, `out_marker4`): outside 0 and l_corners 0 in all scenes; 2x2
   blocks left where overlap lines meet the outline: both styles 16, April 8, border 2 (corner rule A, card T01b).
   compare_cel 0 mismatches.
+
+## Palette (plan 10, batch pixelpal)
+
+Sheet: `img/pixel_pal_both.png` (April, l2_colour). Checks on the final shader (l2_marker / l2_colour):
+
+| Check | ASW | KOF XIII + L2 |
+|---|---|---|
+| palette_check (foreign colours) | 0 (22 colours) | 0 (31 colours) |
+| line_check --marker, rules A-C | total 0, outside 0 | total 0, outside 0 |
+| l2_check (overlap px over a lit far part) | n/a | 4 of 145 (26 before L2) |
+
+- The 4 L2 px are 1 px bridges inside longer overlap lines; removing them would cut the line into dashes. Kept.
+- Corner rules A-C: rule A keeps 4-6 junction blocks per frame, B 0, C 0. A fully lined 2 px notch or gap stays
+  (owner: fill only where background or an outline break shows).
+- Zones: dominant flat colours (April 8 zones). The Dude test model has no UV map, so it renders flat.
+- Open (owner review): KOF lit hair and gloves look grey (lit tone loses hue); the skirt shadow on the thighs is a
+  near-black brown.

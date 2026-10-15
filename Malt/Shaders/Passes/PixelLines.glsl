@@ -153,6 +153,10 @@ void main()
         ivec2 f = centre_nearer ? p : p + offsets[k];
         if(any(lessThan(f, ivec2(0))) || any(greaterThanEqual(f, size))) continue;
         if((int(round(texelFetch(line_data, f, 0).y)) & 1) == 0) continue;   // ASW Col.A switch: no outline here
+        // KOF XIII L2: a shadow-only near part skips the overlap line where the far part is lit (line_data.z 1; darkest 0.5)
+        ivec2 far = f == p ? p + offsets[k] : p;
+        if(texelFetch(line_data, f, 0).z > 0.25 && texelFetch(line_data, clamp(far, ivec2(0), size - 1), 0).z > 0.75)
+            continue;
         OUT_RESULT = vec4(1.0, vec2(f - p + 2) / 4.0, PIXEL_LINES_OVERLAP);
         return;
     }
