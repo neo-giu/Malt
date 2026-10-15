@@ -157,6 +157,8 @@ def build_tree(plan, preset, name):
     values = dict(PRESETS[preset])
     stops = values.pop('ramp_stops')
     for socket_name, value in values.items():
+        if socket_name.startswith('palette_'):
+            continue
         _set(tree, cel, socket_name, value, written)
     if stops:
         _set_ramp(tree, cel, stops, written)

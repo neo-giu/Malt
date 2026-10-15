@@ -20,6 +20,10 @@ PRESETS = {
         'keep_junctions': True,
         'keep_tips': True,
         'keep_overlap_corners': True,
+        # Palette ramps (spec 09 section 4): shadow slots as (hue shift deg, saturation x, value x) of the lit colour;
+        # stops: N-1 descending light thresholds (slot 0 = lightest). ASW: lit, shadow (Sss).
+        'palette_slots': [],                        # ASW: the shadow slot is lit x Sss
+        'palette_stops': [0.5],
     },
     'KOF XIII': {
         'use_ramp': True,
@@ -40,5 +44,7 @@ PRESETS = {
         'keep_junctions': True,
         'keep_tips': True,
         'keep_overlap_corners': True,
+        'palette_slots': [(8.0, 1.1, 0.78), (15.0, 1.25, 0.55), (22.0, 1.3, 0.4)],
+        'palette_stops': [0.85, 0.5, 0.35, 0.2],    # highlight | lit | shadow | deep | darkest
     },
 }
